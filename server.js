@@ -1,0 +1,77 @@
+// This File Handles The Entry Point Of The Application
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+
+const logger = require("./src/utils/logger");
+const { connectDB, ensureIndexes, client } = require("./src/config/db");
+const { errorHandler } = require("./src/middlewares/errorHandler");
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Apply Global Middleware
+app.use(cors());
+app.use(express.json());
+
+// Health Check Endpoint
+app.get("/health", async (req, res) => {
+  try {
+    await client.db().command({ ping: 1 });
+    res.json({ success: true, message: "Ambulance Service API Running!" });
+  } catch (err) {
+    logger.error({ err }, "Health Check Failed!");
+    res.status(500).json({ success: false, message: "Database Connection Failed!" });
+  }
+});
+
+// Register Api Routes
+const v1Routes = require("./src/routes/v1.index");
+
+app.use("/v1/api", v1Routes);
+
+// Global Error Handler
+app.use(errorHandler);
+
+let serverInstance;
+
+// Import Socket Service Definition
+const SocketService = require("./src/core/socket");
+
+async function startServer() {
+  try {
+    await connectDB();
+    await ensureIndexes();
+
+    serverInstance = app.listen(port, () => {
+      logger.info(`Service Is Live And Fully Operational On Port ${port}!`);
+    });
+
+    // Initialize Websockets
+    SocketService.init(serverInstance);
+
+  } catch (error) {
+    logger.fatal({ error }, "Failed to start server!");
+    process.exit(1);
+  }
+}
+
+// Graceful Shutdown Handler
+async function shutdown(signal) {
+  logger.info(`Received ${signal}. Closing server...`);
+  if (serverInstance) {
+    serverInstance.close(async () => {
+      logger.info("HTTP server closed!");
+      await client.close();
+      logger.info("MongoDB connection closed!");
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+startServer();
