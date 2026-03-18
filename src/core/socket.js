@@ -41,7 +41,24 @@ class SocketService {
     });
 
     const locationRateLimits = new Map();
-    const nonceRegistry = new Set(); // Replay Protection Registry (In-memory Proxy)
+
+    // Security Guard: Distributed Replay Attack Defense (Timestamp + Nonce)
+    const validateReplay = async (timestamp, nonce) => {
+      try {
+        const skew = Math.abs(Date.now() - timestamp);
+        if (skew > 30000) return false; // Max 30s Drift
+
+        const { getCollection } = require("../config/db");
+        const collection = await getCollection("nonces");
+        
+        // Atomic Insert-If-Not-Exists (Unique Constraint Handle)
+        await collection.insertOne({ nonce, createdAt: new Date() });
+        return true;
+      } catch (err) {
+        // Duplicate Nonce Error (Code 11000) Means Replay Detected
+        return false;
+      }
+    };
 
     this.io.on("connection", (socket) => {
       const userId = socket.userId;
@@ -53,16 +70,6 @@ class SocketService {
       socket.join("driver_" + userId);
 
       logger.info({ userId, socketId: socket.id }, "User Online — Listening For Core Engine Events.");
-
-      // Security Guard: Replay Attack Defense (Timestamp + Nonce)
-      const validateReplay = (timestamp, nonce) => {
-        const skew = Math.abs(Date.now() - timestamp);
-        if (skew > 15000) return false; // Max 15s Drift
-        if (nonceRegistry.has(nonce)) return false; 
-        nonceRegistry.add(nonce);
-        setTimeout(() => nonceRegistry.delete(nonce), 600000); // 10-Min Ttl
-        return true;
-      };
 
       // Update Last Socket Connection For Partners Natively (Silently Drops For Non-partners)
       PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => {});
@@ -108,7 +115,7 @@ class SocketService {
       // Listener: User Initiates Manual Negotiation With A Specific Driver
       socket.on("initiate_negotiation", async ({ orderId, driverId, amount, version, timestamp, nonce }, ack) => {
         try {
-          if (!validateReplay(timestamp, nonce)) return ack({ success: false, message: "Security Violation: Replay Detected!" });
+          if (!(await validateReplay(timestamp, nonce))) return ack({ success: false, message: "Security Violation: Replay Detected!" });
           const NegotiationService = require("../modules/negotiation/negotiation.service");
           
           const session = await NegotiationService.initiate(userId.toString(), { 
@@ -139,7 +146,7 @@ class SocketService {
       // Listener: Bidding Interaction (User/Driver Counter-offer Or Respond)
       socket.on("negotiation_respond", async ({ sessionId, orderId, action, amount, sequence, timestamp, nonce }, ack) => {
         try {
-          if (!validateReplay(timestamp, nonce)) return;
+          if (!(await validateReplay(timestamp, nonce))) return;
           const NegotiationService = require("../modules/negotiation/negotiation.service");
           const NegotiationRepository = require("../modules/negotiation/negotiation.repository");
 
@@ -168,10 +175,11 @@ class SocketService {
              return ack({ success: true });
           }
           
-          // Add Message (Target Document Has status: 'active' Guard)
+          // Add Message (Target Document Has status: 'active' and 'lastSequence' Guard)
           const updatedSession = await NegotiationRepository.addMessage(sessionId, {
             sender: socket.userId.toString() === session.userId.toString() ? "user" : "driver",
-            amount
+            amount,
+            sequence
           });
 
           if (!updatedSession) return ack({ success: false, message: "Bid Round Limit Exceeded!" });

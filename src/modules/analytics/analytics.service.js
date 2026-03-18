@@ -4,7 +4,7 @@ const logger = require("../../utils/logger");
 
 class AnalyticsService {
   // Record A Negotiation Round Completion For KPI Tracking
-  async logNegotiationEvent(orderId, sessionId, driverId, round, outcome, finalAmount = null) {
+  async logNegotiationEvent(orderId, sessionId, driverId, round, outcome, finalAmount = null, estimatedFare = null) {
     try {
       const { ObjectId } = require("mongodb");
       const collection = await getCollection("negotiation_analytics");
@@ -15,6 +15,7 @@ class AnalyticsService {
         roundCount: round,
         outcome, // accepted, rejected, expired_timeout
         finalPrice: finalAmount,
+        estimatedFare,
         timestamp: new Date(),
       });
     } catch (error) {

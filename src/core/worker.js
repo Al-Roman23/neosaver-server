@@ -22,60 +22,94 @@ class BackgroundWorker {
 
   // Reconcile Stale Drivers, Expired Bidding, And Zombie Orders
   async runReconciliation() {
-    const now = new Date();
+    const lockCollection = await getCollection("worker_locks");
+    const lockKey = "global_reconciliation_pulse";
     
-    // 1. Release Drivers With Expired Negotiation Locks
+    try {
+      // 1. Acquire Distributed Lock (Atomic Insert)
+      await lockCollection.insertOne({ lockKey, createdAt: new Date() });
+      
+      const now = new Date();
+      logger.info("Executing Global Reconciliation Pulse (Distributed Lock Acquired)");
+
+      // 2. Perform Parallel Reconciliation Tasks
+      await Promise.allSettled([
+        this.clearStaleNegotiationLocks(),
+        this.reconcileExpiredSessions(now),
+        this.reconcileGhostTrips()
+      ]);
+
+    } catch (err) {
+      if (err.code !== 11000) {
+        logger.error({ err }, "Global Reconciliation Task Execution Failed!");
+      }
+    } finally {
+      // Release Lock For The Next Pulse
+      await lockCollection.deleteOne({ lockKey }).catch(() => {});
+    }
+  }
+
+  // Task: Release Drivers With Expired Negotiation Locks
+  async clearStaleNegotiationLocks() {
     const releasedLocks = await PartnerRepository.clearStaleLocks();
     if (releasedLocks.modifiedCount > 0) {
       logger.warn({ count: releasedLocks.modifiedCount }, "Released Stale Driver Negotiation Locks!");
     }
+  }
 
-    // 2. Handle Expired Negotiation Sessions
+  // Task: Handle Expired Negotiation Sessions
+  async reconcileExpiredSessions(now) {
     const negotiationCollection = await getCollection("negotiation_sessions");
     const expiredSessions = await negotiationCollection
       .find({ status: "active", expiresAt: { $lt: now } })
       .toArray();
 
-    for (const session of expiredSessions) {
-      logger.info({ sessionId: session._id, orderId: session.orderId }, "Cleaning Up Expired Negotiation Session...");
+    if (expiredSessions.length > 0) {
+      logger.info({ count: expiredSessions.length }, "Cleaning Up Expired Negotiation Sessions...");
       
-      // Mark Session As Expired In DB
-      await NegotiationRepository.updateStatus(session._id, "expired_timeout", { 
-        endedReason: "no_response_timeout" 
-      });
+      await Promise.allSettled(expiredSessions.map(async (session) => {
+        // Mark Session As Expired In DB
+        await NegotiationRepository.updateStatus(session._id, "expired_timeout", { 
+          endedReason: "no_response_timeout" 
+        });
 
-      // Unlock Participant Driver
-      await PartnerRepository.unlockFromNegotiation(session.driverId);
+        // Unlock Participant Driver
+        await PartnerRepository.unlockFromNegotiation(session.driverId);
 
-      // Reset Order Document For User Discovery
-      await OrderRepository.recordNegotiationAttempt(session.orderId, session.driverId);
+        // Reset Order Document For User Discovery
+        await OrderRepository.recordNegotiationAttempt(session.orderId, session.driverId);
 
-      // Notify Participant Sockets (If Connected)
-      const socketService = require("./socket");
-      socketService.sendToUser(session.userId.toString(), "negotiation_expired", { 
-        orderId: session.orderId, 
-        message: "No Response From Driver. Negotiation Terminated." 
-      });
-      socketService.sendToUser(session.driverId.toString(), "negotiation_expired", { 
-        orderId: session.orderId, 
-        message: "Negotiation Timed Out Due To Inactivity." 
-      });
+        // Notify Participant Sockets
+        const socketService = require("./socket");
+        socketService.sendToUser(session.userId.toString(), "negotiation_expired", { 
+          orderId: session.orderId, 
+          message: "No Response From Driver. Negotiation Terminated." 
+        });
+        socketService.sendToUser(session.driverId.toString(), "negotiation_expired", { 
+          orderId: session.orderId, 
+          message: "Negotiation Timed Out Due To Inactivity." 
+        });
+      }));
     }
+  }
 
-    // 3. Auto-Cancel "Ghost" Trips (Arrived But No Movement For 15m)
+  // Task: Auto-Cancel "Ghost" Trips (Arrived But No Movement For 15m)
+  async reconcileGhostTrips() {
     const ghostTimeLimit = new Date(Date.now() - 15 * 60 * 1000);
     const ordersCollection = await getCollection("orders");
     const ghostOrders = await ordersCollection
       .find({ status: "arrived", updatedAt: { $lt: ghostTimeLimit } })
       .toArray();
 
-    for (const order of ghostOrders) {
-      logger.warn({ orderId: order._id }, "System Cancelling Inactive 'Arrived' Order (Ghost Trip)...");
-      await OrderRepository.updateStatus(order._id, "cancelled_system", { 
-        cancelledAt: new Date(), 
-        penaltyFlag: true // System Penalization For Stalling
-      });
-      await PartnerRepository.unlockDriver(order.partnerId.toString());
+    if (ghostOrders.length > 0) {
+      logger.warn({ count: ghostOrders.length }, "System Cancelling Inactive 'Arrived' Orders (Ghost Trips)...");
+      await Promise.allSettled(ghostOrders.map(async (order) => {
+        await OrderRepository.updateStatus(order._id, "cancelled_system", { 
+          cancelledAt: new Date(), 
+          penaltyFlag: true 
+        });
+        await PartnerRepository.unlockDriver(order.partnerId.toString());
+      }));
     }
   }
 

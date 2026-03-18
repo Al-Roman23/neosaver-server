@@ -4,17 +4,18 @@ const { ObjectId } = require("mongodb");
 
 class NegotiationRepository {
   // Create A New Negotiation Session
-  async createSession(sessionData) {
+  async createSession(sessionData, options = {}) {
     const collection = await getCollection("negotiation_sessions");
     const result = await collection.insertOne({
       ...sessionData,
       currentRound: 1,
+      lastSequence: 0, // Initialize Ordering Track
       status: "active",
       messages: sessionData.messages || [],
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
-    return collection.findOne({ _id: result.insertedId });
+    }, options);
+    return collection.findOne({ _id: result.insertedId }, options);
   }
 
   // Find Session By Id
@@ -32,32 +33,45 @@ class NegotiationRepository {
     });
   }
 
-  // Atomically Add A Message And Increment Round
-  async addMessage(sessionId, message) {
+  // Atomically Add A Message And Increment Round + Sequence
+  async addMessage(sessionId, message, options = {}) {
     const collection = await getCollection("negotiation_sessions");
     return collection.findOneAndUpdate(
-      { _id: new ObjectId(sessionId), status: "active", currentRound: { $lt: 3 } },
+      { 
+        _id: new ObjectId(sessionId), 
+        status: "active", 
+        currentRound: { $lt: 3 },
+        // Enforce Sequence Integrity At DB Level
+        lastSequence: { $lt: message.sequence } 
+      },
       { 
         $push: { messages: { ...message, timestamp: new Date() } },
         $inc: { currentRound: 1 },
-        $set: { updatedAt: new Date() }
+        $set: { 
+          updatedAt: new Date(),
+          lastSequence: message.sequence 
+        }
       },
-      { returnDocument: "after" }
+      { returnDocument: "after", ...options }
     );
   }
 
-  // Update Final Status And Close Session
-  async updateStatus(sessionId, status, extraFields = {}) {
+  // Update Final Status And Close Session (With Re-entrancy Guard)
+  async updateStatus(sessionId, status, extraFields = {}, options = {}) {
     const collection = await getCollection("negotiation_sessions");
     return collection.updateOne(
-      { _id: new ObjectId(sessionId) },
+      { 
+        _id: new ObjectId(sessionId), 
+        status: { $ne: "accepted" } // Guard: Prevent Multi-Accept Pulses
+      },
       { 
         $set: { 
           status, 
           ...extraFields, 
           updatedAt: new Date() 
         } 
-      }
+      },
+      options
     );
   }
 }

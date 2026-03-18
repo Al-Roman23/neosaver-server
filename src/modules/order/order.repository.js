@@ -24,7 +24,7 @@ class OrderRepository {
   }
 
   // Atomically Lock Order For Negotiation To Prevent Race Conditions
-  async initiateNegotiation(orderId, negotiationId, version) {
+  async initiateNegotiation(orderId, negotiationId, version, options = {}) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.findOneAndUpdate(
       { 
@@ -41,12 +41,12 @@ class OrderRepository {
         },
         $inc: { version: 1 }
       },
-      { returnDocument: "after" }
+      { returnDocument: "after", ...options }
     );
   }
 
   // Record A Failed Negotiation Attempt To Prevent Instant Spam
-  async recordNegotiationAttempt(orderId, partnerId) {
+  async recordNegotiationAttempt(orderId, partnerId, options = {}) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
       { _id: new ObjectId(orderId) },
@@ -63,7 +63,8 @@ class OrderRepository {
           updatedAt: new Date() 
         },
         $inc: { version: 1 }
-      }
+      },
+      options
     );
   }
 
@@ -85,7 +86,7 @@ class OrderRepository {
   }
   
   // Update Status With Full Guard Stack (Role, Status, Version)
-  async updateStatusWithGuard(orderId, partnerId, expectedStatus, newStatus, extraFields = {}) {
+  async updateStatusWithGuard(orderId, partnerId, expectedStatus, newStatus, extraFields = {}, options = {}) {
     const ordersCollection = await getCollection("orders");
     
     // Construct Atomic Filter
@@ -114,19 +115,20 @@ class OrderRepository {
         },
         $inc: { version: 1 }
       },
-      { returnDocument: "after" }
+      { returnDocument: "after", ...options }
     );
   }
 
   // General Status Update With Incrementing Version
-  async updateStatus(orderId, status, extraFields = {}) {
+  async updateStatus(orderId, status, extraFields = {}, options = {}) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
       { _id: new ObjectId(orderId) },
       { 
         $set: { status, ...extraFields, updatedAt: new Date() },
         $inc: { version: 1 }
-      }
+      },
+      options
     );
   }
 

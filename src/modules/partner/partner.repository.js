@@ -19,25 +19,27 @@ class PartnerRepository {
   }
 
   // Update Partner Status And Availability
-  async updateStatus(userId, isAvailable, currentStatus) {
+  async updateStatus(userId, isAvailable, currentStatus, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
-      { $set: { isAvailable, currentStatus, updatedAt: new Date() } }
+      { $set: { isAvailable, currentStatus, updatedAt: new Date() } },
+      options
     );
   }
 
   // Partially Update Partner Fields By User Id
-  async updateByUserId(userId, updateData) {
+  async updateByUserId(userId, updateData, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
-      { $set: { ...updateData, updatedAt: new Date() } }
+      { $set: { ...updateData, updatedAt: new Date() } },
+      options
     );
   }
 
   // Update Driver Geojson Location Vector
-  async updateDriverLocation(userId, lng, lat) {
+  async updateDriverLocation(userId, lng, lat, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId), isOnline: true },
@@ -50,12 +52,13 @@ class PartnerRepository {
           lastLocationUpdate: new Date(),
           updatedAt: new Date(),
         },
-      }
+      },
+      options
     );
   }
 
   // Atomically Lock Driver For A Negotiation Session (Prevents Double-negotiation)
-  async lockForNegotiation(userId, timeoutMs = 60000) {
+  async lockForNegotiation(userId, timeoutMs = 60000, options = {}) {
     const partnersCollection = await getCollection("partners");
     const expiresAt = new Date(Date.now() + timeoutMs);
     
@@ -72,12 +75,12 @@ class PartnerRepository {
           updatedAt: new Date() 
         } 
       },
-      { returnDocument: "after" }
+      { returnDocument: "after", ...options }
     );
   }
 
   // Explicitly Release Driver From Negotiation Lock
-  async unlockFromNegotiation(userId) {
+  async unlockFromNegotiation(userId, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
@@ -87,12 +90,13 @@ class PartnerRepository {
           negotiationLockExpiresAt: null, 
           updatedAt: new Date() 
         } 
-      }
+      },
+      options
     );
   }
 
   // Clear Stale Negotiation Locks (Called By Background Worker)
-  async clearStaleLocks() {
+  async clearStaleLocks(options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateMany(
       { 
@@ -105,12 +109,13 @@ class PartnerRepository {
           negotiationLockExpiresAt: null, 
           updatedAt: new Date() 
         } 
-      }
+      },
+      options
     );
   }
 
   // Atomically Lock Driver To An Order (Prevents Double-booking)
-  async lockDriver(userId, orderId) {
+  async lockDriver(userId, orderId, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId), currentOrderId: null }, // Guard
@@ -121,12 +126,13 @@ class PartnerRepository {
           negotiationLockExpiresAt: null,
           updatedAt: new Date() 
         } 
-      }
+      },
+      options
     );
   }
 
   // Unlock Driver After Trip Is Completed Or Cancelled
-  async unlockDriver(userId) {
+  async unlockDriver(userId, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
@@ -136,7 +142,8 @@ class PartnerRepository {
           isNegotiating: false, 
           updatedAt: new Date() 
         } 
-      }
+      },
+      options
     );
   }
 

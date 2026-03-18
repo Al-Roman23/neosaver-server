@@ -53,12 +53,30 @@ async function ensureIndexes() {
       { expireAfterSeconds: 3600 }
     );
 
+    // Nonce Registry (Distributed Replay Protection)
+    const noncesCollection = db.collection("nonces");
+    await noncesCollection.createIndex({ nonce: 1 }, { unique: true });
+    await noncesCollection.createIndex(
+      { createdAt: 1 },
+      { expireAfterSeconds: 600 } // 10-Min TTL
+    );
+
+    // Distributed Worker Lock (Ensures Only One In-Flight Reconciliation)
+    const workerLocksCollection = db.collection("worker_locks");
+    await workerLocksCollection.createIndex({ lockKey: 1 }, { unique: true });
+    await workerLocksCollection.createIndex(
+      { createdAt: 1 },
+      { expireAfterSeconds: 60 } // Safety Release
+    );
+
     // Ambulance Partners Collection Indexes
     const partnersCollection = db.collection("partners");
     await partnersCollection.createIndex({ email: 1 }, { unique: true });
     await partnersCollection.createIndex({ userId: 1 }, { unique: true });
     await partnersCollection.createIndex({ location: "2dsphere" });
-    await partnersCollection.createIndex({ isOnline: 1, currentOrderId: 1 });
+    // Optimized Compound Index For Discovery
+    await partnersCollection.createIndex({ isOnline: 1, currentOrderId: 1, isAvailable: 1, isNegotiating: 1 });
+    
     // Index For Negotiation Locking & Stale Lock Cleanup
     await partnersCollection.createIndex(
       { isNegotiating: 1 },
@@ -78,6 +96,7 @@ async function ensureIndexes() {
     const negotiationCollection = db.collection("negotiation_sessions");
     await negotiationCollection.createIndex({ orderId: 1, currentRound: -1 });
     await negotiationCollection.createIndex({ status: 1, expiresAt: 1 });
+    await negotiationCollection.createIndex({ userId: 1, status: 1 }); // Quick Active Lookups
 
     // Feedbacks Collection Index
     const feedbacksCollection = db.collection("feedbacks");
@@ -109,8 +128,8 @@ async function ensureIndexes() {
 
     // Orders Collection Indexes -> Optimize Dispatch And History Queries
     const ordersCollection = db.collection("orders");
-    await ordersCollection.createIndex({ userId: 1 });
-    await ordersCollection.createIndex({ partnerId: 1 });
+    await ordersCollection.createIndex({ userId: 1, status: 1 }); // Compound Success Lookup
+    await ordersCollection.createIndex({ partnerId: 1, status: 1 }); 
     await ordersCollection.createIndex({ status: 1 });
     await ordersCollection.createIndex({ status: 1, createdAt: -1 });
     await ordersCollection.createIndex({ pickupLocation: "2dsphere" });

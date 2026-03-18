@@ -1,7 +1,7 @@
 const OrderRepository = require("./order.repository");
 const PartnerRepository = require("../partner/partner.repository");
 const AnalyticsService = require("../analytics/analytics.service");
-const { getCollection } = require("../../config/db");
+const { getCollection, client } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { BadRequest, Conflict, NotFound } = require("../../core/errors/errors");
 const logger = require("../../utils/logger");
@@ -74,86 +74,61 @@ class OrderService {
     return order;
   }
 
-  // Fetch Nearby Drivers With Scarcity-Based Surge Pricing Information
-  async fetchNearbyForDiscovery(pickupLng, pickupLat) {
-    const negotiationService = require("../negotiation/negotiation.service");
-    
-    // Find Nearby Drivers Who Are Online AND Available
-    const collection = await getCollection("partners");
-    const drivers = await collection
-      .find({
-        location: {
-          $nearSphere: {
-            $geometry: { type: "Point", coordinates: [parseFloat(pickupLng), parseFloat(pickupLat)] },
-            $maxDistance: 10000,
-          },
-        },
-        isOnline: true,
-        currentOrderId: null,
-        // Include "isNegotiating" Drivers As "Likely Unavailable" But Don't Hide Them!
-      })
-      .limit(10)
-      .toArray();
-
-    // Calculate Dynamic Surge For The Batch
-    const pricing = await negotiationService.calculateSuggestedFare(pickupLng, pickupLat, 5); // Example: 5Km Default Estimate
-
-    return {
-      drivers: drivers.map(d => ({
-        id: d.userId,
-        location: d.location,
-        isLikelyUnavailable: d.isNegotiating === true, // UX Hint
-        lastSeen: d.lastLocationUpdate,
-        vehicleType: d.vehicleType || "Basic Ambulance"
-      })),
-      pricingMetadata: pricing
-    };
-  }
-
   // User Or Driver Cancels An Order (Supports Granular Penalty Logic)
   async cancelOrder(orderId, userId, cancelBy = "user") {
-    const order = await OrderRepository.findById(orderId);
-    if (!order) throw new NotFound("Order Not Found!");
+    const dbSession = client.startSession();
+    try {
+      let result = null;
+      
+      await dbSession.withTransaction(async () => {
+        const order = await OrderRepository.findById(orderId);
+        if (!order) throw new NotFound("Order Not Found!");
 
-    // Security Verification: Can Only Be Status Changed By Participant
-    const isUser = order.userId.toString() === userId;
-    const isDriver = order.partnerId && order.partnerId.toString() === userId;
-    if (!isUser && !isDriver) throw new BadRequest("Unauthorized To Cancel This Order!");
+        // Security Verification: Can Only Be Status Changed By Participant
+        const isUser = order.userId.toString() === userId;
+        const isDriver = order.partnerId && order.partnerId.toString() === userId;
+        if (!isUser && !isDriver) throw new BadRequest("Unauthorized To Cancel This Order!");
 
-    // Forbidden If Already Completed
-    if (["completed", "cancelled_by_user", "cancelled_by_driver"].includes(order.status)) {
-      throw new BadRequest("Order Is Already Finalized!");
+        // Forbidden If Already Completed
+        if (["completed", "cancelled_by_user", "cancelled_by_driver"].includes(order.status)) {
+          throw new BadRequest("Order Is Already Finalized!");
+        }
+
+        // Penalty Logic: Mid-Trip Cancellations (After Pickup Or In-Transport)
+        const isMidTrip = ["to_destination", "pickup_started", "arrived"].includes(order.status);
+        const penaltyApplied = isDriver && isMidTrip;
+
+        const newStatus = cancelBy === "user" ? "cancelled_by_user" : "cancelled_by_driver";
+        
+        await OrderRepository.updateStatus(orderId, newStatus, { 
+          cancelledAt: new Date(),
+          cancelledBy: cancelBy,
+          penaltyFlag: penaltyApplied
+        }, { session: dbSession });
+
+        // Log Penalty To Dedicated Tracking Layer
+        if (penaltyApplied) {
+          await AnalyticsService.logDriverPenalty(order.partnerId.toString(), orderId, "mid_trip_cancellation");
+        }
+
+        // Unlock Driver Completely
+        if (order.partnerId) {
+          await PartnerRepository.unlockDriver(order.partnerId.toString(), { session: dbSession });
+          const socketService = require("../../core/socket");
+          socketService.io.to("driver_" + order.partnerId.toString()).emit("order_cancelled", { orderId, by: cancelBy });
+          socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
+        }
+
+        result = { 
+          message: `Order Cancelled By ${cancelBy.toUpperCase()}!`, 
+          penaltyFlag: penaltyApplied 
+        };
+      });
+
+      return result;
+    } finally {
+      await dbSession.endSession();
     }
-
-    // Penalty Logic: Mid-Trip Cancellations (After Pickup Or In-Transport)
-    const isMidTrip = ["to_destination", "pickup_started", "arrived"].includes(order.status);
-    const penaltyApplied = isDriver && isMidTrip;
-
-    const newStatus = cancelBy === "user" ? "cancelled_by_user" : "cancelled_by_driver";
-    
-    await OrderRepository.updateStatus(orderId, newStatus, { 
-      cancelledAt: new Date(),
-      cancelledBy: cancelBy,
-      penaltyFlag: penaltyApplied
-    });
-
-    // Log Penalty To Dedicated Tracking Layer
-    if (penaltyApplied) {
-      await AnalyticsService.logDriverPenalty(order.partnerId.toString(), orderId, "mid_trip_cancellation");
-    }
-
-    // Unlock Driver Completely
-    if (order.partnerId) {
-      await PartnerRepository.unlockDriver(order.partnerId.toString());
-      const socketService = require("../../core/socket");
-      socketService.io.to("driver_" + order.partnerId.toString()).emit("order_cancelled", { orderId, by: cancelBy });
-      socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
-    }
-
-    return { 
-      message: `Order Cancelled By ${cancelBy.toUpperCase()}!`, 
-      penaltyFlag: penaltyApplied 
-    };
   }
 
   // Driver Arrives — Still Locked By Partner Id
