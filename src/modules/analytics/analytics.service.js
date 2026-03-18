@@ -6,11 +6,12 @@ class AnalyticsService {
   // Record A Negotiation Round Completion For KPI Tracking
   async logNegotiationEvent(orderId, sessionId, driverId, round, outcome, finalAmount = null) {
     try {
+      const { ObjectId } = require("mongodb");
       const collection = await getCollection("negotiation_analytics");
       await collection.insertOne({
-        orderId,
-        sessionId,
-        driverId,
+        orderId: new ObjectId(orderId),
+        sessionId: new ObjectId(sessionId),
+        driverId: new ObjectId(driverId),
         roundCount: round,
         outcome, // accepted, rejected, expired_timeout
         finalPrice: finalAmount,

@@ -70,14 +70,53 @@ class NegotiationService {
         throw new Conflict("Unable To Start Negotiation — Order State Has Changed!");
       }
 
-      // Log Initiation Event For Baseline Analytics
-      await AnalyticsService.logNegotiationEvent(orderId, session._id, driverId, 1, "initiated", initialAmount);
-
+      // Clean Handshake: Negotiation Session Created Successfully
       return session;
     } catch (error) {
       await PartnerRepository.unlockFromNegotiation(driverId);
       throw error;
     }
+  }
+
+  // Transactional Completion: Agreement Reached & Analytics Recorded
+  async completeNegotiation(sessionId, orderId) {
+    const session = await NegotiationRepository.findById(sessionId);
+    if (!session || session.status !== "active") {
+       throw new Conflict("Negotiation Session Inactive Or Already Closed!");
+    }
+
+    // 1. Derive Critical Values (Truth From Message History)
+    const roundCount = session.messages.length;
+    const finalPrice = session.messages[roundCount - 1].amount;
+
+    // 2. Transactional Order Status Update (Guarded By OCC)
+    const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, session.driverId, "negotiating", "accepted", {
+      partnerId: new (require("mongodb")).ObjectId(session.driverId),
+      acceptedAt: new Date(),
+      finalFare: finalPrice
+    });
+
+    if (!updatedOrder) {
+      throw new Conflict("Double-booking Collision Or State Mismatch Detected!");
+    }
+
+    // 3. System Lock: Bind Driver To The Operational Trip
+    await PartnerRepository.lockDriver(session.driverId, orderId);
+
+    // 4. Close Session Documentation
+    await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
+
+    // 5. Terminal Analytics Log (Single Source Of Truth)
+    await AnalyticsService.logNegotiationEvent(
+      orderId,
+      sessionId,
+      session.driverId,
+      roundCount,
+      "accepted",
+      finalPrice
+    );
+
+    return { orderId, finalPrice };
   }
 
   // Handle Negotiation Termination (Failure/Reject/Expire) With Analytics
@@ -95,12 +134,12 @@ class NegotiationService {
     // 3. Reset Order State & Record Attempt To Cooldown
     await OrderRepository.recordNegotiationAttempt(session.orderId, session.driverId);
 
-    // Track Failure Reason In Analytics Layer
+    // Terminal Analytics Log (Single Source Of Truth)
     await AnalyticsService.logNegotiationEvent(
       session.orderId, 
       sessionId, 
       session.driverId, 
-      session.currentRound, 
+      session.messages.length, // Derived Round Count
       outcome
     );
     

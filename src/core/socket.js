@@ -150,22 +150,15 @@ class SocketService {
           if (sequence <= (session.lastSequence || 0)) return ack({ success: false, message: "Out-of-Order Packet Trapped!" });
 
           if (action === "accept") {
-             // 1. Transactional Accept Post-Negotiation
-             const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, session.driverId, "negotiating", "accepted", {
-               partnerId: new (require("mongodb")).ObjectId(session.driverId),
-               acceptedAt: new Date(),
-               finalFare: session.messages[session.messages.length - 1].amount
+             // 1. Service-Layer Atomic Completion (Business Rules + Analytics)
+             await NegotiationService.completeNegotiation(sessionId, orderId);
+             
+             // 2. Synchronize Unified State To Room Participants
+             this.io.to("order_" + orderId).emit("negotiation_finalized", { 
+               status: "accepted", 
+               orderId 
              });
-             
-             if (!updatedOrder) return ack({ success: false, message: "Double-booking Collision Detected!" });
 
-             // 2. Lock Driver For The Trip Document
-             await PartnerRepository.lockDriver(session.driverId, orderId);
-             
-             // 3. Mark Negotiation As Audit-Closed
-             await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
-
-             this.io.to("order_" + orderId).emit("negotiation_finalized", { status: "accepted", orderId });
              return ack({ success: true });
           }
 
