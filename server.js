@@ -18,7 +18,7 @@ app.use(express.json());
 app.get("/health", async (req, res) => {
   try {
     await client.db().command({ ping: 1 });
-    res.json({ success: true, message: "Ambulance Service API Running!" });
+    res.json({ success: true, message: "Neosaver-Server API Running!" });
   } catch (err) {
     logger.error({ err }, "Health Check Failed!");
     res.status(500).json({ success: false, message: "Database Connection Failed!" });

@@ -28,12 +28,11 @@ class OrderService {
         $geoNear: {
           near: { type: "Point", coordinates: [parseFloat(pickupLng), parseFloat(pickupLat)] },
           distanceField: "dist.calculated",
-          maxDistance: 10000,
           query: { isOnline: true, currentOrderId: null, isAvailable: true, isNegotiating: { $ne: true } },
           spherical: true,
         },
       },
-      { $limit: 10 }, // Limit Discovery Set For Performance
+      { $limit: 9 }, // Top 9 Closest Drivers (Unlimited Radius)
       { $project: { _id: 1, name: 1, ambulanceType: 1, vehicleNumber: 1, "dist.calculated": 1 } }
     ]).toArray();
 
@@ -91,13 +90,13 @@ class OrderService {
         },
         isOnline: true,
         currentOrderId: null,
-        // Include "isNegotiating" drivers as "Likely Unavailable" but don't hide them!
+        // Include "isNegotiating" Drivers As "Likely Unavailable" But Don't Hide Them!
       })
       .limit(10)
       .toArray();
 
     // Calculate Dynamic Surge For The Batch
-    const pricing = await negotiationService.calculateSuggestedFare(pickupLng, pickupLat, 5); // Example: 5km default estimate
+    const pricing = await negotiationService.calculateSuggestedFare(pickupLng, pickupLat, 5); // Example: 5Km Default Estimate
 
     return {
       drivers: drivers.map(d => ({

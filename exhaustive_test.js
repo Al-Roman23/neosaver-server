@@ -102,9 +102,9 @@ async function runTest() {
       headers: { Authorization: `Bearer ${userToken}` }
     });
     const surge = discovery.data.data.pricingMetadata;
-    console.log("✅ Discovery Layer: Found " + discovery.data.data.drivers.length + " Driver(s).");
-    console.log("🔥 Surge Pricing: " + (surge.surgeApplied ? "APPLIED (Multiplier: 1.5x)" : "Standard"));
-    console.log("💰 Estimated Fare: " + surge.estimatedFare + " BDT");
+    console.log(`✅ Discovery Layer: Found ${discovery.data.data.drivers.length} Driver(s) (Top 9 Proximity-Buffer Active).`);
+    console.log(`🔥 Surge Pricing: ${surge.surgeApplied ? "⚠️ ACTIVE" : "Standard"}`);
+    console.log(`💰 Estimated Fare: ${surge.estimatedFare} BDT`);
 
     // ---------------------------------------------------------
     // 5. NEGOTIATION ENGINE (MULTI-ROUND BIDDING)

@@ -18,7 +18,7 @@ class NegotiationService {
     const driverCount = await collection.countDocuments({
       location: {
         $geoWithin: {
-          $centerSphere: [[parseFloat(pickupLng), parseFloat(pickupLat)], 10 / 6378.1],
+          $centerSphere: [[parseFloat(pickupLng), parseFloat(pickupLat)], 25 / 6378.1],
         },
       },
       isOnline: true,

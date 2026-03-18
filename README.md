@@ -5,6 +5,10 @@ This is the mission-critical **Backend API Engine** for **NeoSaver**, a life-sav
 
 The system is built on a sophisticated **Manual Driver Selection & Multi-Round Bidding Protocol**. This ensures fair pricing, maximizes driver availability, and provides users with a transparent selection process during medical emergencies. Unlike automated dispatch models, this architecture prioritizes the human element of negotiation to find the best possible match for every urgent trip.
 
+### 🌍 Production Registry
+*   **Live Backend URL**: `https://neosaver-server.onrender.com`
+*   **Live Health Status**: `https://neosaver-server.onrender.com/health`
+
 ---
 
 ### 🏛 Advanced Industrial Architecture

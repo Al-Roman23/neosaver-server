@@ -83,8 +83,7 @@ class OrderRepository {
       }
     );
   }
-
-  // Update Status With Full Guard Stack (Role, Status, Version)
+  
   // Update Status With Full Guard Stack (Role, Status, Version)
   async updateStatusWithGuard(orderId, partnerId, expectedStatus, newStatus, extraFields = {}) {
     const ordersCollection = await getCollection("orders");
@@ -151,7 +150,7 @@ class OrderRepository {
   }
 
   async findHistoryByPartnerId(partnerId) {
-    const ordersCollection = await getCollection("partners");
+    const ordersCollection = await getCollection("orders");
     return ordersCollection
       .find({ partnerId: new ObjectId(partnerId) })
       .sort({ createdAt: -1 })
