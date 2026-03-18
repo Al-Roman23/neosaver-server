@@ -54,12 +54,74 @@ class PartnerRepository {
     );
   }
 
+  // Atomically Lock Driver For A Negotiation Session (Prevents Double-negotiation)
+  async lockForNegotiation(userId, timeoutMs = 60000) {
+    const partnersCollection = await getCollection("partners");
+    const expiresAt = new Date(Date.now() + timeoutMs);
+    
+    return partnersCollection.findOneAndUpdate(
+      { 
+        userId: new ObjectId(userId), 
+        currentOrderId: null,      // Must Not Be On A Trip
+        isNegotiating: { $ne: true } // Must Not Be Negotiating Already
+      },
+      { 
+        $set: { 
+          isNegotiating: true, 
+          negotiationLockExpiresAt: expiresAt,
+          updatedAt: new Date() 
+        } 
+      },
+      { returnDocument: "after" }
+    );
+  }
+
+  // Explicitly Release Driver From Negotiation Lock
+  async unlockFromNegotiation(userId) {
+    const partnersCollection = await getCollection("partners");
+    return partnersCollection.updateOne(
+      { userId: new ObjectId(userId) },
+      { 
+        $set: { 
+          isNegotiating: false, 
+          negotiationLockExpiresAt: null, 
+          updatedAt: new Date() 
+        } 
+      }
+    );
+  }
+
+  // Clear Stale Negotiation Locks (Called By Background Worker)
+  async clearStaleLocks() {
+    const partnersCollection = await getCollection("partners");
+    return partnersCollection.updateMany(
+      { 
+        isNegotiating: true, 
+        negotiationLockExpiresAt: { $lt: new Date() } 
+      },
+      { 
+        $set: { 
+          isNegotiating: false, 
+          negotiationLockExpiresAt: null, 
+          updatedAt: new Date() 
+        } 
+      }
+    );
+  }
+
   // Atomically Lock Driver To An Order (Prevents Double-booking)
   async lockDriver(userId, orderId) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId), currentOrderId: null }, // Guard
-      { $set: { currentOrderId: new ObjectId(orderId), updatedAt: new Date() } }
+      { 
+        $set: { 
+          currentOrderId: new ObjectId(orderId), 
+          isNegotiating: false, // Release Negotiation Lock If Finalized
+          negotiationLockExpiresAt: null,
+          updatedAt: new Date() 
+        } 
+      }
     );
   }
 
@@ -68,7 +130,13 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
-      { $set: { currentOrderId: null, updatedAt: new Date() } }
+      { 
+        $set: { 
+          currentOrderId: null, 
+          isNegotiating: false, 
+          updatedAt: new Date() 
+        } 
+      }
     );
   }
 

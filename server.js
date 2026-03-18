@@ -35,8 +35,9 @@ app.use(errorHandler);
 
 let serverInstance;
 
-// Import Socket Service Definition
+// Import Socket Service Definition And Background Worker
 const SocketService = require("./src/core/socket");
+const BackgroundWorker = require("./src/core/worker");
 
 async function startServer() {
   try {
@@ -47,8 +48,9 @@ async function startServer() {
       logger.info(`Service Is Live And Fully Operational On Port ${port}!`);
     });
 
-    // Initialize Websockets
+    // Initialize Websockets And Background Processes
     SocketService.init(serverInstance);
+    BackgroundWorker.start(); // Global Reconciliation Heartbeat
 
   } catch (error) {
     logger.fatal({ error }, "Failed to start server!");
@@ -62,6 +64,7 @@ async function shutdown(signal) {
   if (serverInstance) {
     serverInstance.close(async () => {
       logger.info("HTTP server closed!");
+      BackgroundWorker.stop(); // Stop Background Processes
       await client.close();
       logger.info("MongoDB connection closed!");
       process.exit(0);

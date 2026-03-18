@@ -11,6 +11,7 @@ const aboutRoutes = require("../modules/content/about.routes");
 const notificationRoutes = require("../modules/notification/notification.routes");
 const userProfileRoutes = require("../modules/user/profile.routes");
 const orderRoutes = require("../modules/order/order.routes");
+const negotiationRoutes = require("../modules/negotiation/negotiation.routes");
 
 // Mount Individual Routes Under The V1 Router
 router.use("/auth", authRoutes);
@@ -22,5 +23,6 @@ router.use("/about-us", aboutRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/user", userProfileRoutes);
 router.use("/orders", orderRoutes);
+router.use("/negotiations", negotiationRoutes);
 
 module.exports = router;

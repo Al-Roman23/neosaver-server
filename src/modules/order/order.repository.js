@@ -3,11 +3,14 @@ const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 
 class OrderRepository {
-  // Insert A New Pending Order Document
+  // Insert A New Pending Order Document With Versioning And Clean Retry State
   async createOrder(orderData) {
     const ordersCollection = await getCollection("orders");
     const result = await ordersCollection.insertOne({
       ...orderData,
+      version: 1, // Initialize Optimistic Concurrency Control
+      negotiationId: null,
+      attemptedDrivers: [], // Array Of { driverId: ObjectId, lastTriedAt: Date }
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -20,24 +23,51 @@ class OrderRepository {
     return ordersCollection.findOne({ _id: new ObjectId(orderId) });
   }
 
-  // Atomically Accept Order — Sets Status, Partnerid, And Acceptedat In One Operation
-  async atomicAccept(orderId, partnerId) {
+  // Atomically Lock Order For Negotiation To Prevent Race Conditions
+  async initiateNegotiation(orderId, negotiationId, version) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.findOneAndUpdate(
-      { _id: new ObjectId(orderId), status: "pending" },
-      {
-        $set: {
-          status: "accepted",
-          partnerId: new ObjectId(partnerId),
-          acceptedAt: new Date(),
-          updatedAt: new Date(),
+      { 
+        _id: new ObjectId(orderId), 
+        status: "pending", 
+        negotiationId: null,
+        version: version // Safety Check
+      },
+      { 
+        $set: { 
+          status: "negotiating", 
+          negotiationId: new ObjectId(negotiationId),
+          updatedAt: new Date() 
         },
+        $inc: { version: 1 }
       },
       { returnDocument: "after" }
     );
   }
 
-  // Set Driver's Live Location Inside The Order Document (For App-reopen Sync)
+  // Record A Failed Negotiation Attempt To Prevent Instant Spam
+  async recordNegotiationAttempt(orderId, partnerId) {
+    const ordersCollection = await getCollection("orders");
+    return ordersCollection.updateOne(
+      { _id: new ObjectId(orderId) },
+      { 
+        $push: { 
+          attemptedDrivers: { 
+            driverId: new ObjectId(partnerId), 
+            lastTriedAt: new Date() 
+          } 
+        },
+        $set: { 
+          negotiationId: null, 
+          status: "pending",
+          updatedAt: new Date() 
+        },
+        $inc: { version: 1 }
+      }
+    );
+  }
+
+  // Update Driver Location (Live Re-sync Safety)
   async updateDriverLocation(orderId, lng, lat) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
@@ -54,36 +84,64 @@ class OrderRepository {
     );
   }
 
-  // Update Status With A Partner Id Guard (Security Check)
-  async updateStatusWithGuard(orderId, partnerId, status, extraFields = {}) {
+  // Update Status With Full Guard Stack (Role, Status, Version)
+  // Update Status With Full Guard Stack (Role, Status, Version)
+  async updateStatusWithGuard(orderId, partnerId, expectedStatus, newStatus, extraFields = {}) {
     const ordersCollection = await getCollection("orders");
+    
+    // Construct Atomic Filter
+    const filter = { 
+      _id: new ObjectId(orderId), 
+      status: Array.isArray(expectedStatus) ? { $in: expectedStatus } : expectedStatus 
+    };
+
+    // Only Enforce partnerId If Already Assigned (States Post-negotiation)
+    const assignedStates = ["accepted", "arrived", "pickup_started", "to_destination"];
+    const isAssigned = Array.isArray(expectedStatus) 
+      ? expectedStatus.some(s => assignedStates.includes(s))
+      : assignedStates.includes(expectedStatus);
+
+    if (isAssigned && partnerId) {
+      filter.partnerId = new ObjectId(partnerId);
+    }
+
     return ordersCollection.findOneAndUpdate(
-      { _id: new ObjectId(orderId), partnerId: new ObjectId(partnerId) },
-      { $set: { status, ...extraFields, updatedAt: new Date() } },
+      filter,
+      { 
+        $set: { 
+          status: newStatus, 
+          ...extraFields, 
+          updatedAt: new Date() 
+        },
+        $inc: { version: 1 }
+      },
       { returnDocument: "after" }
     );
   }
 
-  // General Lifecycle Status Update
+  // General Status Update With Incrementing Version
   async updateStatus(orderId, status, extraFields = {}) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
       { _id: new ObjectId(orderId) },
-      { $set: { status, ...extraFields, updatedAt: new Date() } }
+      { 
+        $set: { status, ...extraFields, updatedAt: new Date() },
+        $inc: { version: 1 }
+      }
     );
   }
 
-  // Get User's Current Active Order
+  // Get User's Active Order (Supports Negotiating State)
   async findActiveByUserId(userId) {
     const ordersCollection = await getCollection("orders");
-    const activeStatuses = ["pending", "accepted", "pickup_started", "to_destination"];
+    const activeStatuses = ["pending", "negotiating", "accepted", "arrived", "pickup_started", "to_destination"];
     return ordersCollection.findOne({
       userId: new ObjectId(userId),
       status: { $in: activeStatuses },
     });
   }
 
-  // Get User's Full Order History
+  // History And History By Driver Remain Same (Standard Sort)
   async findHistoryByUserId(userId) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection
@@ -92,19 +150,17 @@ class OrderRepository {
       .toArray();
   }
 
-  // Get Driver's Full Order History
   async findHistoryByPartnerId(partnerId) {
-    const ordersCollection = await getCollection("orders");
+    const ordersCollection = await getCollection("partners");
     return ordersCollection
       .find({ partnerId: new ObjectId(partnerId) })
       .sort({ createdAt: -1 })
       .toArray();
   }
 
-  // Get Driver's Current Active Order
   async findActiveByPartnerId(partnerId) {
     const ordersCollection = await getCollection("orders");
-    const activeStatuses = ["accepted", "pickup_started", "to_destination"];
+    const activeStatuses = ["accepted", "arrived", "pickup_started", "to_destination"];
     return ordersCollection.findOne({
       partnerId: new ObjectId(partnerId),
       status: { $in: activeStatuses },

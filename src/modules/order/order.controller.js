@@ -56,50 +56,52 @@ class OrderController {
     }
   }
 
-  // Cancel An Active Order
+  // Fetch Nearby Drivers For Discovery Layer (Includes Surge Data)
+  async getNearbyDrivers(req, res, next) {
+    try {
+      const { pickupLng, pickupLat } = req.query;
+      if (!pickupLng || !pickupLat) throw new require("../../core/errors/errors").BadRequest("Coordinates Required!");
+
+      const data = await OrderService.fetchNearbyForDiscovery(pickupLng, pickupLat);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Cancel An Order (Supports User, Driver, And Penalty Logic)
   async cancelOrder(req, res, next) {
     try {
       const userId = req.user.id;
       const { id: orderId } = req.params;
+      const role = req.user.role; // Extract Role From Token
 
-      const result = await OrderService.cancelOrder(orderId, userId);
+      const result = await OrderService.cancelOrder(orderId, userId, role);
 
       res.status(200).json({
         success: true,
         message: result.message,
+        penaltyFlag: result.penaltyFlag
       });
     } catch (error) {
       next(error);
     }
   }
 
-  // Arrived At Pickup (Driver Only)
-  async arrived(req, res, next) {
-    try {
-      const partnerId = req.user.id;
-      const { id: orderId } = req.params;
-      const order = await OrderService.arrived(orderId, partnerId);
-
-      res.status(200).json({
-        success: true,
-        message: "Arrived Notification Sent To User",
-        data: order,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Start Trip — Patient In Ambulance (Driver Only)
+  // Start Trip — Requires OTP Verification From User Device
   async startTrip(req, res, next) {
     try {
       const partnerId = req.user.id;
       const { id: orderId } = req.params;
-      const order = await OrderService.startTrip(orderId, partnerId);
+      const { otp } = req.body;
+
+      if (!otp) throw new require("../../core/errors/errors").BadRequest("OTP Verification Code Required!");
+
+      const order = await OrderService.startTripWithOTP(orderId, partnerId, otp);
 
       res.status(200).json({
         success: true,
-        message: "Trip Started — Heading To Destination",
+        message: "OTP Verified! Trip Started Successfully.",
         data: order,
       });
     } catch (error) {
@@ -107,16 +109,33 @@ class OrderController {
     }
   }
 
-  // Complete Trip — Arrived At Hospital (Driver Only)
+  // Driver Arrives At Destination (Status Toggle Post-Negotiation)
+  async markArrived(req, res, next) {
+    try {
+      const partnerId = req.user.id;
+      const { id: orderId } = req.params;
+      const order = await OrderService.markArrived(orderId, partnerId);
+
+      res.status(200).json({
+        success: true,
+        message: "Arrival Formally Logged. Waiting For User OTP.",
+        data: order,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Final Completion — Final Destination Reached (Driver Only)
   async completeTrip(req, res, next) {
     try {
       const partnerId = req.user.id;
       const { id: orderId } = req.params;
-      const order = await OrderService.completeTrip(orderId, partnerId);
+      const order = await OrderService.finishTrip(orderId, partnerId);
 
       res.status(200).json({
         success: true,
-        message: "Trip Completed Successfully!",
+        message: "Trip Completed! Checkout Process Finalized.",
         data: order,
       });
     } catch (error) {

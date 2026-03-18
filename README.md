@@ -1,117 +1,80 @@
-# 🚑 NeoSaver V1.0 - Ambulance Dispatch & Management Engine (Server)
+# 🚑 NeoSaver Core Engine — Primary Ambulance Dispatch & Negotiation System (Server)
 
-### 📌 Orchestration Overview
-This is the high-performance Backend API Engine for **NeoSaver**, a life-saving ambulance dispatch ecosystem designed for the **People’s Republic of Bangladesh**. This project marks a significant social-impact initiative where I served as the **Primary Backend Architect**, responsible for the core dispatch logic, real-time safety protocols, and secure data orchestration. 
+### 📌 Project Context
+This is the mission-critical **Backend API Engine** for **NeoSaver**, a life-saving ambulance dispatch ecosystem designed for the **People’s Republic of Bangladesh**.
 
-While the frontend was implemented by a collaborative partner, I architected this server using a **Domain-Based Vertical Slice Architecture**. This approach ensures absolute decoupling between different business domains (e.g., Orders vs. Auth), making the system production-ready, highly maintainable, and industrially resilient.
-
----
-
-### 🏛 Industrial Architecture & Implementation
-**Pattern: Modular Domain-Based Vertical Slice**  
-Unlike traditional MVC, the codebase is segmented into **Bounded Contexts**. This prevents "God Objects" and ensures that the system can scale as new features (like hospital integrations or oxygen tracking) are added.
-
-1.  **Domain Modules**: Self-contained slices (Auth, Partner, Order, etc.) containing their own Controllers, Services, and Repositories.
-2.  **Infrastructure & Core**: A centralized layer for Database management (MongoDB), Real-time Socket Hubs, and Global Error handling.
-3.  **Delivery Layer**: Unified Versioned Routing (V1 API) protecting the business domain from external technological shifts.
-
-#### 🛰 The Real-Time Dispatch Engine
-The core strength of NeoSaver lies in its geographic dispatch logic:
-*   **Geographic Discovery**: Dynamically filtering online partners based on coverage areas.
-*   **Socket-Driven Handshaking**: Real-time order requests sent to drivers with a 30-second logic-based acceptance window.
-*   **State Machine Enforcement**: A strictPatrol logic that manages the life cycle of a trip (Arrived -> Started -> Completed).
+The system is built on a sophisticated **Manual Driver Selection & Multi-Round Bidding Protocol**. This ensures fair pricing, maximizes driver availability, and provides users with a transparent selection process during medical emergencies. Unlike automated dispatch models, this architecture prioritizes the human element of negotiation to find the best possible match for every urgent trip.
 
 ---
 
-### 🛠 Tech Stack
+### 🏛 Advanced Industrial Architecture
+**Pattern: Distributed Modular Domain-Based Vertical Slice**  
+The system is built as a **Modular Monolith**, segmented into **Bounded Contexts**. This ensures that the business logic for "Negotiation" is entirely decoupled from "User Profiles" or "Auth," allowing for independent scaling and maintenance.
+
+#### 🧠 The SSOT State Machine
+*   **Single Source of Truth (SSOT)**: The `Order` document is the absolute source of truth. All sub-processes (Negotiations) are ephemeral handlers that transactionally update the main trip lifecycle.
+*   **Optimistic Concurrency Control (OCC)**: Every state-changing operation uses a `version` field and atomic MongoDB updates (`findOneAndUpdate`) to prevent race conditions and "double-booking" in a high-concurrency environment.
+*   **Global Reconciliation Pulse**: A dedicated **Background Worker** (30s Heartbeat) monitors the cluster for stale driver locks, expired negotiations, and "ghost" trips, ensuring the system "auto-heals" after network drops or client crashes.
+
+---
+
+### 🔥 Mission-Critical Features
+1.  **Manual Selection Discovery**: Users can discover nearby online drivers with real-time distance and **Scarcity-based Surge Pricing metadata**.
+2.  **Multi-Round Bidding Protocol**: A sophisticated WebSocket-driven negotiation flow allowing up to 3 rounds of counter-offers between User and Driver.
+3.  **Atomic Driver Locking**: Drivers are atomically locked during a negotiation (`isNegotiating: true`) to prevent "Phantom Bids" and ensure dedicated attention.
+4.  **Zero-Trust OTP Verification**: Trips cannot begin until the Driver verifies a 4-digit OTP provided by the User, ensuring a secure "Patient-in-Ambulance" confirmation.
+5.  **High-Resolution Analytics**: Track negotiation round outcomes, price deltas, and driver cancellation penalties (`penalty_flag`) for operational optimization.
+6.  **Reliable Delivery (Triple-Retry ACK)**: Mission-critical socket events (Order Accepted/Arrived) use a built-in handshake retry logic with fallback to a persistent Offline Notification queue.
+
+---
+
+### 🛠 Tech Stack & Security
 #### **High-Performance Core**
-*   **Node.js & Express**: Scalable runtime and minimalist framework for rapid API delivery.
-*   **MongoDB (Native Driver)**: High-availability document store for flexible ambulance and user profiles.
-*   **Socket.io**: Persistent bi-directional communication for mission-critical location tracking.
-*   **Pino**: Structured, ultra-fast logging with environment-specific levels.
+*   **Node.js & Express**: Scalable runtime and minimalist API framework.
+*   **MongoDB (Native Driver)**: High-speed document store utilizing **2dsphere Geospatial Indexes** for proximity search.
+*   **Socket.io**: Persistent bi-directional communication with **Namespace Partitioning**.
+*   **Pino**: Structured, ultra-fast logging with Correlation ID tracking.
 
-#### **Security & Logistics**
-*   **JWT (Dual-Token Strategy)**: Secure Access and Refresh tokens for high-security, long-lived sessions.
-*   **Bcrypt**: State-of-the-art password hashing (12 rounds) for local credential security.
-*   **ImgBB API**: Automated asset delegation for ambulance and profile verification images.
-*   **Nodemailer**: Automated SMTP orchestration for secure password recovery.
-
----
-
-### 🚀 Installation & Local Baseline
-Initialize the secure environment on your local machine.
-
-#### **Prerequisites**
-*   Node.js (v18.0+)
-*   MongoDB Instance (Local or Atlas)
-*   ImgBB API Key
-*   SMTP Credentials (Gmail)
-
-#### **1. Clone & Entry**
-```bash
-git clone https://github.com/Al-Roman23/neosaver-server.git
-cd neosaver-server
-```
-
-#### **2. Dependency Resolution**
-```bash
-npm install
-```
-
-#### **3. Environment Configuration (.env)**
-Create a `.env` in the root directory with the following blueprint:
-
-```env
-# Infrastructure
-PORT=5000
-NODE_ENV=development
-
-# Database (MongoDB)
-DB_USER=your_user
-DB_PASS=your_password
-DB_NAME=SaverDB
-
-# Security
-JWT_SECRET="YOUR_LONG_RANDOM_SECRET"
-REFRESH_TOKEN_EXPIRES_IN="30d"
-
-# Third-Party APIs
-IMGBB_API_KEY=your_key
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_google_app_password
-
-# Client Pointer
-CLIENT_URL=http://localhost:5173
-```
-
-#### **4. Launch Development Tunnel**
-```bash
-npm run dev
-```
+#### **Security Hardening**
+*   **Replay Attack Defense**: Nonce-based security guards for all state-changing WebSocket events (Timestamp + Nonce validation).
+*   **JWT (Dual-Token Rotation)**: Secure Access and Refresh tokens for long-lived, high-security sessions.
+*   **Role-Based Access Control (RBAC)**: Strict permission guards for `user`, `driver`, and `admin` scopes.
+*   **Idempotency Enforcement**: Prevent duplicate transactions across the entire bidding lifecycle.
 
 ---
 
-### 📂 Project Structure Hierarchy
+### 📂 Structural Hierarchy
 ```text
 src/
-├── config/           # Database Connection & Configuration
-├── core/             # Global Error Handlers & Socket Services
-├── middlewares/      # JWT, Role, & Status Guards
+├── config/           # DB Connection, Geospatial Indexing, Logger
+├── core/             # Global Error Handlers, Socket Hub, Pulse Worker
+├── middlewares/      # JWT, RBAC, Rate Limiting, Replay Protection
 ├── modules/          # Bounded Contexts (Vertical Slices)
-│   ├── auth/         # Registry, Login, Token Management
-│   ├── order/        # Dispatch Engine & Trip Workflow
-│   ├── partner/      # Onboarding & Status Management
+│   ├── negotiation/  # Multi-Round Bidding & Locking Logic
+│   ├── analytics/    # KPI Tracking & Driver Penalty Metrics
+│   ├── order/        # Manual Selection & OTP Trip Workflow
+│   ├── partner/      # Onboarding, Availability & Lock Management
 │   ├── user/         # Identity & Profile Management
 │   └── feedback/     # Social Proof & Quality Control
-│   └── contact/      # Contact Management
-│   └── notification/ # Notification Management
-├── routes/           # Unified API Gateway (v1 Index)
-└── utils/            # Common Helpers (Email, JWT, ImgBB)
+├── routes/           # Unified API Gateway (Versioned Index)
+└── utils/            # Common Helpers (Email, JWT, Security Nonces)
 ```
 
 ---
 
-### 👨‍💻 Primary Developer
+### 🚀 Rapid Start & Verification
+1.  **Install Dependencies**: `npm install`
+2.  **Configure `.env`**: (Follow the Blueprint in `.env.example`)
+3.  **Launch Primary Server**: `npm run dev`
+4.  **Exhaustive E2E Verification**:
+    ```bash
+    node exhaustive_test.js
+    ```
+    *This script verifies 100% of the system paths (Discovery -> Negotiation -> Bidding -> OTP -> Completion).*
+
+---
+
+### 👨‍💻 Primary Developer & Architect
 **Muhammad Al-Roman Molla**  
 *System Architect | Backend Specialist*  
 **A Project for the People’s Republic of Bangladesh**

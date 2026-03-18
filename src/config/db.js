@@ -59,6 +59,12 @@ async function ensureIndexes() {
     await partnersCollection.createIndex({ userId: 1 }, { unique: true });
     await partnersCollection.createIndex({ location: "2dsphere" });
     await partnersCollection.createIndex({ isOnline: 1, currentOrderId: 1 });
+    // Index For Negotiation Locking & Stale Lock Cleanup
+    await partnersCollection.createIndex(
+      { isNegotiating: 1 },
+      { partialFilterExpression: { isNegotiating: true } }
+    );
+    await partnersCollection.createIndex({ negotiationLockExpiresAt: 1 });
 
     // Refresh Tokens Collection Indexes -> TTL: 30 Days
     const refreshTokensCollection = db.collection("refresh_tokens");
@@ -68,6 +74,11 @@ async function ensureIndexes() {
       { expireAfterSeconds: 30 * 24 * 60 * 60 }
     );
     
+    // Negotiation Sessions Collection Indexes
+    const negotiationCollection = db.collection("negotiation_sessions");
+    await negotiationCollection.createIndex({ orderId: 1, currentRound: -1 });
+    await negotiationCollection.createIndex({ status: 1, expiresAt: 1 });
+
     // Feedbacks Collection Index
     const feedbacksCollection = db.collection("feedbacks");
     await feedbacksCollection.createIndex({ createdAt: 1 });
@@ -88,13 +99,24 @@ async function ensureIndexes() {
     const offlineNotificationsCollection = db.collection("offline_notifications");
     await offlineNotificationsCollection.createIndex({ userId: 1, delivered: 1 });
 
-    // Orders Collection Indexes -> Optimize Dispatch & History Queries
+    // Analytics & Penalty Collection Indexes
+    const analyticsCollection = db.collection("negotiation_analytics");
+    await analyticsCollection.createIndex({ driverId: 1, timestamp: -1 });
+    await analyticsCollection.createIndex({ orderId: 1 });
+
+    const penaltiesCollection = db.collection("driver_penalties");
+    await penaltiesCollection.createIndex({ driverId: 1, timestamp: -1 });
+
+    // Orders Collection Indexes -> Optimize Dispatch And History Queries
     const ordersCollection = db.collection("orders");
     await ordersCollection.createIndex({ userId: 1 });
     await ordersCollection.createIndex({ partnerId: 1 });
     await ordersCollection.createIndex({ status: 1 });
     await ordersCollection.createIndex({ status: 1, createdAt: -1 });
     await ordersCollection.createIndex({ pickupLocation: "2dsphere" });
+    // Index For Optimistic Concurrency Control And Negotiation Lookups
+    await ordersCollection.createIndex({ version: 1 });
+    await ordersCollection.createIndex({ negotiationId: 1 });
   } catch (err) {
     logger.fatal({ err }, "Failed To Ensure Database Indexes!");
     throw err;

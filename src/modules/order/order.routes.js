@@ -6,16 +6,18 @@ const { verifyAuthToken } = require("../../middlewares/verifyAuthToken");
 const { verifyRole } = require("../../middlewares/verifyRole");
 
 // User Routes -> Authenticated Users Only
+// Discovery & Selection Phase
+router.get("/nearby", verifyAuthToken, verifyRole(["user"]), OrderController.getNearbyDrivers);
 router.post("/", verifyAuthToken, verifyRole(["user"]), OrderController.createOrder);
-router.get("/active", verifyAuthToken, verifyRole(["user"]), OrderController.getActiveOrder);
-router.get("/history", verifyAuthToken, verifyRole(["user"]), OrderController.getOrderHistory);
-router.delete("/:id", verifyAuthToken, verifyRole(["user"]), OrderController.cancelOrder);
 
-// Driver Workflow Routes -> Authenticated Drivers Only
-router.patch("/:id/arrived", verifyAuthToken, verifyRole(["driver"]), OrderController.arrived);
+// Active Management Phase (Shared Lifecycle)
+router.get("/active", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.getActiveOrder);
+router.get("/history", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.getOrderHistory);
+router.delete("/:id", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.cancelOrder);
+
+// Driver Action Flow Phase
+router.patch("/:id/arrived", verifyAuthToken, verifyRole(["driver"]), OrderController.markArrived);
 router.patch("/:id/start", verifyAuthToken, verifyRole(["driver"]), OrderController.startTrip);
 router.patch("/:id/complete", verifyAuthToken, verifyRole(["driver"]), OrderController.completeTrip);
-router.get("/partner/active", verifyAuthToken, verifyRole(["driver"]), OrderController.getActiveOrderByPartner);
-router.get("/partner/history", verifyAuthToken, verifyRole(["driver"]), OrderController.getOrderHistoryByPartner);
 
 module.exports = router;

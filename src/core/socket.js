@@ -41,6 +41,7 @@ class SocketService {
     });
 
     const locationRateLimits = new Map();
+    const nonceRegistry = new Set(); // Replay Protection Registry (In-memory Proxy)
 
     this.io.on("connection", (socket) => {
       const userId = socket.userId;
@@ -51,7 +52,17 @@ class SocketService {
       // Force Drivers To Join A Dedicated Room For Dispatch Targeting
       socket.join("driver_" + userId);
 
-      logger.info({ userId, socketId: socket.id }, "User Connected Via WebSocket!");
+      logger.info({ userId, socketId: socket.id }, "User Online — Listening For Core Engine Events.");
+
+      // Security Guard: Replay Attack Defense (Timestamp + Nonce)
+      const validateReplay = (timestamp, nonce) => {
+        const skew = Math.abs(Date.now() - timestamp);
+        if (skew > 15000) return false; // Max 15s Drift
+        if (nonceRegistry.has(nonce)) return false; 
+        nonceRegistry.add(nonce);
+        setTimeout(() => nonceRegistry.delete(nonce), 600000); // 10-Min Ttl
+        return true;
+      };
 
       // Update Last Socket Connection For Partners Natively (Silently Drops For Non-partners)
       PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => {});
@@ -94,90 +105,125 @@ class SocketService {
         }
       });
 
-      // Listener: Driver Accepts An Order
-      socket.on("accept_order", async ({ orderId }) => {
+      // Listener: User Initiates Manual Negotiation With A Specific Driver
+      socket.on("initiate_negotiation", async ({ orderId, driverId, amount, version, timestamp, nonce }, ack) => {
         try {
-          if (!orderId) return;
-          const OrderService = require("../modules/order/order.service");
-
-          // Step 1: Atomic Accept At Db Level (Only One Driver Wins)
-          const order = await OrderRepository.findById(orderId);
-          if (!order || order.status !== "pending") return;
-
-          const accepted = await OrderRepository.atomicAccept(orderId, userId);
-          if (!accepted) return; // Another Driver Was Faster
-
-          // Step 2: Atomic Driver Lock
-          const lock = await PartnerRepository.lockDriver(userId, orderId);
-          if (lock.modifiedCount === 0) {
-            // Driver Already Busy -> Revert Order Back To Pending
-            await OrderRepository.updateStatus(orderId, "pending");
-            return;
-          }
-
-          // Step 3: Signal Dispatch Loop That Acceptance Happened
-          OrderService.signalAcceptance(orderId);
-          OrderService.cancelExpiryTimer(orderId);
-
-          // Step 4: Join Order Room For Live Tracking
-          socket.join("order_" + orderId);
-          // Also Join The User To The Order Room
-          const userSocketId = this.users.get(accepted.userId.toString());
-          if (userSocketId) {
-            const userSocket = this.io.sockets.sockets.get(userSocketId);
-            if (userSocket) userSocket.join("order_" + orderId);
-          }
-
-          // Step 5: Notify The User Their Order Was Accepted
-          this.sendToUser(accepted.userId.toString(), "order_accepted", {
-            orderId,
-            driverInfo: { userId },
+          if (!validateReplay(timestamp, nonce)) return ack({ success: false, message: "Security Violation: Replay Detected!" });
+          const NegotiationService = require("../modules/negotiation/negotiation.service");
+          
+          const session = await NegotiationService.initiate(userId.toString(), { 
+            orderId, driverId, initialAmount: amount, version 
           });
 
-          // Step 6: Cancel Out All Other Drivers From The Current Dispatch Batch
-          const batchIds = OrderService.getDispatchedBatch(orderId);
-          if (batchIds) {
-            batchIds.forEach((driverUserId) => {
-              if (driverUserId !== userId.toString()) {
-                this.io.to("driver_" + driverUserId).emit("order_taken", { orderId });
-              }
-            });
+          // Join Both Participant Rooms For Real-time Sync
+          socket.join("order_" + orderId);
+          const driverSocketId = this.users.get(driverId.toString());
+          if (driverSocketId) {
+             const driverSocket = this.io.sockets.sockets.get(driverSocketId);
+             if (driverSocket) driverSocket.join("order_" + orderId);
           }
 
-          logger.info({ orderId, userId }, "Order Accepted By Driver!");
+          // Emit Negotiation Request To Driver
+          this.io.to("driver_" + driverId).emit("new_negotiation_request", {
+            orderId, sessionId: session._id, userId, initialAmount: amount
+          });
+
+          ack({ success: true, sessionId: session._id });
+          logger.info({ orderId, userId, driverId }, "Negotiation Formally Initiated!");
         } catch (error) {
-          logger.error({ error, userId }, "Failed To Process Order Acceptance!");
+          logger.error({ error, userId }, "Bidding Initiation Blocked!");
+          ack({ success: false, message: error.message });
         }
       });
 
-      // Listener: Driver Rejects An Order (Order Stays Pending For Next Batch)
-      socket.on("reject_order", ({ orderId }) => {
-        logger.info({ orderId, userId }, "Driver Rejected Order — Waiting For Next Batch.");
+      // Listener: Bidding Interaction (User/Driver Counter-offer Or Respond)
+      socket.on("negotiation_respond", async ({ sessionId, orderId, action, amount, sequence, timestamp, nonce }, ack) => {
+        try {
+          if (!validateReplay(timestamp, nonce)) return;
+          const NegotiationService = require("../modules/negotiation/negotiation.service");
+          const NegotiationRepository = require("../modules/negotiation/negotiation.repository");
+
+          const session = await NegotiationRepository.findById(sessionId);
+          if (!session || session.status !== "active") return ack({ success: false, message: "Session Inactive!" });
+
+          // Message Ordering Guarantee (Sequence Check)
+          if (sequence <= (session.lastSequence || 0)) return ack({ success: false, message: "Out-of-Order Packet Trapped!" });
+
+          if (action === "accept") {
+             // 1. Transactional Accept Post-Negotiation
+             const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, session.driverId, "negotiating", "accepted", {
+               partnerId: new (require("mongodb")).ObjectId(session.driverId),
+               acceptedAt: new Date(),
+               finalFare: session.messages[session.messages.length - 1].amount
+             });
+             
+             if (!updatedOrder) return ack({ success: false, message: "Double-booking Collision Detected!" });
+
+             // 2. Lock Driver For The Trip Document
+             await PartnerRepository.lockDriver(session.driverId, orderId);
+             
+             // 3. Mark Negotiation As Audit-Closed
+             await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
+
+             this.io.to("order_" + orderId).emit("negotiation_finalized", { status: "accepted", orderId });
+             return ack({ success: true });
+          }
+
+          if (action === "reject") {
+             await NegotiationService.failNegotiation(sessionId, "rejected_by_party");
+             this.io.to("order_" + orderId).emit("negotiation_finalized", { status: "rejected", orderId });
+             return ack({ success: true });
+          }
+          
+          // Add Message (Target Document Has status: 'active' Guard)
+          const updatedSession = await NegotiationRepository.addMessage(sessionId, {
+            sender: socket.userId.toString() === session.userId.toString() ? "user" : "driver",
+            amount
+          });
+
+          if (!updatedSession) return ack({ success: false, message: "Bid Round Limit Exceeded!" });
+
+          // Synchronize State To All Parties In The Room
+          this.io.to("order_" + orderId).emit("negotiation_update", {
+             sessionId, amount, round: updatedSession.currentRound, sequence
+          });
+          
+          ack({ success: true });
+        } catch (error) {
+          logger.error({ error, userId }, "Bidding Interaction Cycle Failed!");
+          ack({ success: false });
+        }
       });
 
       socket.on("disconnect", () => {
         this.users.delete(userId.toString());
         locationRateLimits.delete(userId.toString());
-        
-        // Auto-offline Disconnected Drivers Safely
-        PartnerRepository.updateByUserId(userId, { isOnline: false, isAvailable: false, currentStatus: "offline" }).catch(() => {});
-        logger.info({ userId, socketId: socket.id }, "User Disconnected From WebSocket!");
+        logger.info({ userId, socketId: socket.id }, "User Disconnected (Stateless Pulse Intact).");
       });
     });
 
     // WebSocket Service Initialized Successfully!
   }
 
-  // Send Message To A Specific User By Their Id Or Queue If Offline
-  sendToUser(userId, event, data) {
+  // Refactored Reliable Delivery With Triple-retry ACK Logic For Mission-Critical Status
+  sendToUser(userId, event, data, retryCount = 0) {
     const socketId = this.users.get(userId.toString());
     if (socketId && this.io) {
-      this.io.to(socketId).emit(event, data);
+      // Use Socket.io Built-in Timeout To Verify Remote Handshake
+      this.io.to(socketId).timeout(5000).emit(event, data, (err, responses) => {
+        if (err) {
+          if (retryCount < 2) {
+             logger.warn({ userId, event, retryCount }, "Real-time ACK Missing — Retrying...");
+             this.sendToUser(userId, event, data, retryCount + 1);
+          } else {
+             logger.error({ userId, event }, "TCP/WS Delivery Exhausted — Queueing Persistence.");
+             OfflineNotificationService.queueNotification(userId, event, data);
+          }
+        }
+      });
       return true;
     }
-    logger.warn({ userId, event }, "User Offline: Queueing Notification!");
     
-    // Asynchronously Queue Notification For Later
     OfflineNotificationService.queueNotification(userId, event, data);
     return false;
   }
