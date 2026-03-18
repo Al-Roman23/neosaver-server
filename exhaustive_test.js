@@ -2,8 +2,8 @@
 const io = require("socket.io-client");
 const axios = require("axios");
 
-const BASE_URL = "http://localhost:5000/v1/api";
-const SOCKET_URL = "http://localhost:5000";
+const BASE_URL = "https://neosaver-server.onrender.com/v1/api";
+const SOCKET_URL = "https://neosaver-server.onrender.com";
 
 async function runTest() {
   console.log("🚀 STARTING NEOSAVER CORE ENGINE: FINAL EXHAUSTIVE TEST...");

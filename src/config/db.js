@@ -39,105 +39,75 @@ async function connectDB() {
 async function ensureIndexes() {
   try {
     const db = await connectDB();
+    const results = [];
 
-    // Users Collection Indexes
-    const usersCollection = db.collection("users");
-    await usersCollection.createIndex({ email: 1 }, { unique: true });
-    await usersCollection.createIndex({ phone: 1 }, { unique: true });
+    const safeIndex = async (collectionName, keys, options = {}) => {
+      try {
+        await db.collection(collectionName).createIndex(keys, options);
+        results.push(`✅ [${collectionName}] Index ${JSON.stringify(keys)} Created!`);
+      } catch (err) {
+        results.push(`❌ [${collectionName}] Index ${JSON.stringify(keys)} FAILED: ${err.message}`);
+        logger.error({ err, collectionName, keys }, "Index Creation Error");
+      }
+    };
 
-    // Reset Tokens Collection Indexes -> TTL: Auto-Expire After 1 Hour
-    const resetTokensCollection = db.collection("reset_tokens");
-    await resetTokensCollection.createIndex({ email: 1 });
-    await resetTokensCollection.createIndex(
-      { createdAt: 1 },
-      { expireAfterSeconds: 3600 }
-    );
+    // 1. Users
+    await safeIndex("users", { email: 1 }, { unique: true });
+    await safeIndex("users", { phone: 1 }, { unique: true });
 
-    // Nonce Registry (Distributed Replay Protection)
-    const noncesCollection = db.collection("nonces");
-    await noncesCollection.createIndex({ nonce: 1 }, { unique: true });
-    await noncesCollection.createIndex(
-      { createdAt: 1 },
-      { expireAfterSeconds: 600 } // 10-Min TTL
-    );
+    // 2. Auth Tokens
+    await safeIndex("reset_tokens", { email: 1 });
+    await safeIndex("reset_tokens", { createdAt: 1 }, { expireAfterSeconds: 3600 });
+    await safeIndex("refresh_tokens", { token: 1 });
+    await safeIndex("refresh_tokens", { createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
-    // Distributed Worker Lock (Ensures Only One In-Flight Reconciliation)
-    const workerLocksCollection = db.collection("worker_locks");
-    await workerLocksCollection.createIndex({ lockKey: 1 }, { unique: true });
-    await workerLocksCollection.createIndex(
-      { createdAt: 1 },
-      { expireAfterSeconds: 60 } // Safety Release
-    );
+    // 3. Security (Nonces)
+    await safeIndex("nonces", { nonce: 1 }, { unique: true });
+    await safeIndex("nonces", { createdAt: 1 }, { expireAfterSeconds: 600 });
 
-    // Ambulance Partners Collection Indexes
-    const partnersCollection = db.collection("partners");
-    await partnersCollection.createIndex({ email: 1 }, { unique: true });
-    await partnersCollection.createIndex({ userId: 1 }, { unique: true });
-    await partnersCollection.createIndex({ location: "2dsphere" });
-    // Optimized Compound Index For Discovery
-    await partnersCollection.createIndex({ isOnline: 1, currentOrderId: 1, isAvailable: 1, isNegotiating: 1 });
+    // 4. Concurrency (Worker Locks)
+    await safeIndex("worker_locks", { lockKey: 1 }, { unique: true });
+    await safeIndex("worker_locks", { createdAt: 1 }, { expireAfterSeconds: 60 });
+
+    // 5. MISSION CRITICAL: Partners (Geo + Locking)
+    await safeIndex("partners", { email: 1 }, { unique: true });
+    await safeIndex("partners", { userId: 1 }, { unique: true });
+    await safeIndex("partners", { location: "2dsphere" });
+    await safeIndex("partners", { isOnline: 1, currentOrderId: 1, isAvailable: 1, isNegotiating: 1 });
+    await safeIndex("partners", { isNegotiating: 1 }, { partialFilterExpression: { isNegotiating: true } });
+    await safeIndex("partners", { negotiationLockExpiresAt: 1 });
+
+    // 6. Negotiation Sessions
+    await safeIndex("negotiation_sessions", { orderId: 1, currentRound: -1 });
+    await safeIndex("negotiation_sessions", { status: 1, expiresAt: 1 });
+    await safeIndex("negotiation_sessions", { userId: 1, status: 1 });
+
+    // 7. Orders (Geo + Performance)
+    await safeIndex("orders", { userId: 1, status: 1 });
+    await safeIndex("orders", { partnerId: 1, status: 1 });
+    await safeIndex("orders", { status: 1, createdAt: -1 });
+    await safeIndex("orders", { pickupLocation: "2dsphere" });
+    await safeIndex("orders", { version: 1 });
+    await safeIndex("orders", { negotiationId: 1 });
+
+    // 8. Public Content & Feedbacks
+    await safeIndex("feedbacks", { createdAt: 1 });
+    await safeIndex("terms_and_conditions", { sectionNumber: 1 }, { unique: true });
+    await safeIndex("privacy_policy", { sectionNumber: 1 }, { unique: true });
+    await safeIndex("about_us", { sectionNumber: 1 }, { unique: true });
+    await safeIndex("offline_notifications", { userId: 1, delivered: 1 });
+
+    // 9. Analytics
+    await safeIndex("negotiation_analytics", { driverId: 1, timestamp: -1 });
+    await safeIndex("negotiation_analytics", { orderId: 1 });
+    await safeIndex("driver_penalties", { driverId: 1, timestamp: -1 });
+
+    logger.info("--- DATABASE INDEX PROVISIONING REPORT ---");
+    results.forEach(msg => logger.info(msg));
+    logger.info("------------------------------------------");
     
-    // Index For Negotiation Locking & Stale Lock Cleanup
-    await partnersCollection.createIndex(
-      { isNegotiating: 1 },
-      { partialFilterExpression: { isNegotiating: true } }
-    );
-    await partnersCollection.createIndex({ negotiationLockExpiresAt: 1 });
-
-    // Refresh Tokens Collection Indexes -> TTL: 30 Days
-    const refreshTokensCollection = db.collection("refresh_tokens");
-    await refreshTokensCollection.createIndex({ token: 1 });
-    await refreshTokensCollection.createIndex(
-      { createdAt: 1 },
-      { expireAfterSeconds: 30 * 24 * 60 * 60 }
-    );
-    
-    // Negotiation Sessions Collection Indexes
-    const negotiationCollection = db.collection("negotiation_sessions");
-    await negotiationCollection.createIndex({ orderId: 1, currentRound: -1 });
-    await negotiationCollection.createIndex({ status: 1, expiresAt: 1 });
-    await negotiationCollection.createIndex({ userId: 1, status: 1 }); // Quick Active Lookups
-
-    // Feedbacks Collection Index
-    const feedbacksCollection = db.collection("feedbacks");
-    await feedbacksCollection.createIndex({ createdAt: 1 });
-
-    // Terms And Conditions Collection Index -> Unique Section Numbers
-    const termsCollection = db.collection("terms_and_conditions");
-    await termsCollection.createIndex({ sectionNumber: 1 }, { unique: true });
-
-    // Privacy Policy Collection Index -> Unique Section Numbers
-    const privacyCollection = db.collection("privacy_policy");
-    await privacyCollection.createIndex({ sectionNumber: 1 }, { unique: true });
-
-    // About Us Collection Index -> Unique Section Numbers
-    const aboutCollection = db.collection("about_us");
-    await aboutCollection.createIndex({ sectionNumber: 1 }, { unique: true });
-
-    // Offline Notifications Collection Indexes -> Optimize Pending Queue Search
-    const offlineNotificationsCollection = db.collection("offline_notifications");
-    await offlineNotificationsCollection.createIndex({ userId: 1, delivered: 1 });
-
-    // Analytics & Penalty Collection Indexes
-    const analyticsCollection = db.collection("negotiation_analytics");
-    await analyticsCollection.createIndex({ driverId: 1, timestamp: -1 });
-    await analyticsCollection.createIndex({ orderId: 1 });
-
-    const penaltiesCollection = db.collection("driver_penalties");
-    await penaltiesCollection.createIndex({ driverId: 1, timestamp: -1 });
-
-    // Orders Collection Indexes -> Optimize Dispatch And History Queries
-    const ordersCollection = db.collection("orders");
-    await ordersCollection.createIndex({ userId: 1, status: 1 }); // Compound Success Lookup
-    await ordersCollection.createIndex({ partnerId: 1, status: 1 }); 
-    await ordersCollection.createIndex({ status: 1 });
-    await ordersCollection.createIndex({ status: 1, createdAt: -1 });
-    await ordersCollection.createIndex({ pickupLocation: "2dsphere" });
-    // Index For Optimistic Concurrency Control And Negotiation Lookups
-    await ordersCollection.createIndex({ version: 1 });
-    await ordersCollection.createIndex({ negotiationId: 1 });
   } catch (err) {
-    logger.fatal({ err }, "Failed To Ensure Database Indexes!");
+    logger.fatal({ err }, "Fatal Database Initialization Failure!");
     throw err;
   }
 }
