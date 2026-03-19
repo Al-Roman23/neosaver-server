@@ -132,10 +132,10 @@ async function runTest() {
     });
 
     // ATOMIC LOCK TEST: User Initiates Negotiation Via Socket
-    console.log("🔄 Step: Initiating User ↔ Driver Bidding Handshake...");
+    console.log("🔄 Step: Initiating User ↔ Driver Bidding Handshake (Request Only)...");
     const initAck = await new Promise((resolve) => {
       uSocket.emit("initiate_negotiation", { 
-        orderId, driverId, amount: 800, version: initialVersion, ...generateSecurity() 
+        orderId, driverId, version: initialVersion, ...generateSecurity() 
       }, resolve);
     });
     if (!initAck.success) throw new Error("Negotiation Initiation Failed: " + initAck.message);
@@ -149,30 +149,64 @@ async function runTest() {
     console.log("🔄 Step: Verifying Concurrent Negotiation Lock Idempotency...");
     const failAck = await new Promise((resolve) => {
       uSocket.emit("initiate_negotiation", { 
-        orderId, driverId, amount: 900, version: initialVersion, ...generateSecurity() 
+        orderId, driverId, version: initialVersion, ...generateSecurity() 
       }, resolve);
     });
     if (failAck.success) throw new Error("FAIL: System Allowed Double-Negotiation On Busy Driver!");
     console.log("✅ Locking Verified: System Blocked Concurrent Bidding.");
 
-    // BIDDING ROUND: Driver Counter-Offers
-    console.log("🔄 Step: Simulating Multi-Round Bidding Interplay...");
-    await new Promise((resolve) => {
-       dSocket.emit("negotiation_respond", {
-          sessionId, orderId, action: "counter", amount: 1200, sequence: 1, ...generateSecurity()
-       }, (res) => { if(res.success) resolve(); else throw new Error(res.message); });
-    });
-    console.log("✅ Round 2: Driver Counter-Offer Emitted (1200 BDT).");
+    // ==========================================
+    // MULTI-ROUND BIDDING OPTIONS
+    // Change TEST_OPTION to "B" to Test Max Rounds Failure
+    // ==========================================
+    const TEST_OPTION = "B"; // "A" for Agreement, "B" for Max Rounds Failure
 
-    // FINAL ACCEPTANCE
-    console.log("🔄 Step: Closing Negotiation AGREEMENT...");
-    const acceptAck = await new Promise((resolve) => {
-      dSocket.emit("negotiation_respond", {
-        sessionId, orderId, action: "accept", sequence: 2, ...generateSecurity()
-      }, resolve);
-    });
-    if (!acceptAck.success) throw new Error("Agreement Closure Failed!");
-    console.log("✅ AGREEMENT REACHED: Order Status -> ACCEPTED (OCC Version Incremented).");
+    console.log(`🔄 Step: Simulating Multi-Round Bidding Interplay (Running Option ${TEST_OPTION})...`);
+    
+    if (TEST_OPTION === "A") {
+      // ROUND 1
+      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
+      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
+      console.log("✅ Round 1 (Driver 1500 -> User 1200) Emitted.");
+
+      // ROUND 2
+      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1400, sequence: 3, ...generateSecurity() }, r));
+      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1300, sequence: 4, ...generateSecurity() }, r));
+      console.log("✅ Round 2 (Driver 1400 -> User 1300) Emitted.");
+
+      // FINAL ACCEPTANCE (Driver Accepts User's 1300)
+      console.log("🔄 Step: Closing Negotiation AGREEMENT...");
+      const acceptAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "accept", sequence: 5, ...generateSecurity() }, r));
+      if (!acceptAck.success) throw new Error("Agreement Closure Failed!");
+      console.log("✅ AGREEMENT REACHED: Order Status -> ACCEPTED (OCC Version Incremented).");
+    } else {
+      // ROUND 1
+      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
+      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
+      console.log("✅ Round 1 Completed.");
+
+      // ROUND 2
+      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1400, sequence: 3, ...generateSecurity() }, r));
+      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1250, sequence: 4, ...generateSecurity() }, r));
+      console.log("✅ Round 2 Completed.");
+
+      // ROUND 3 (Final Allowed)
+      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1350, sequence: 5, ...generateSecurity() }, r));
+      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1300, sequence: 6, ...generateSecurity() }, r));
+      console.log("✅ Round 3 Completed (Max Limit Reached).");
+
+      // ATTEMPT 4TH ROUND (Should Fail)
+      const failAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1320, sequence: 7, ...generateSecurity() }, r));
+      if (failAck.success) throw new Error("Security Flaw: Allowed 4th Round!");
+      console.log("✅ System Correctly Blocked 4th Round.");
+
+      // DRIVER REJECTS
+      console.log("🔄 Step: Failing Negotiation...");
+      const rejectAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "reject", sequence: 8, ...generateSecurity() }, r));
+      if (!rejectAck.success) throw new Error("Rejection Closure Failed!");
+      console.log("✅ NEGOTIATION REJECTED & TRACKED. Ending Test Gracefully for Option B.");
+      process.exit(0); // Exit here since we can't do the trip if they rejected
+    }
 
     // ---------------------------------------------------------
     // 6. OTP & TRIP WORKFLOW DOMAIN

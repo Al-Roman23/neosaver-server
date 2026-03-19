@@ -8,7 +8,7 @@ class NegotiationRepository {
     const collection = await getCollection("negotiation_sessions");
     const result = await collection.insertOne({
       ...sessionData,
-      currentRound: 1,
+      currentRound: 0,
       lastSequence: 0, // Initialize Ordering Track
       status: "active",
       messages: sessionData.messages || [],
@@ -40,7 +40,7 @@ class NegotiationRepository {
       { 
         _id: new ObjectId(sessionId), 
         status: "active", 
-        currentRound: { $lt: 3 },
+        currentRound: { $lt: 6 }, // 6 messages = EXACTLY 3 full rounds (Driver x3 + User x3)
         // Enforce Sequence Integrity At DB Level
         lastSequence: { $lt: message.sequence } 
       },

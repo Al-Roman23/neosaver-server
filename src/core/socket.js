@@ -113,13 +113,13 @@ class SocketService {
       });
 
       // Listener: User Initiates Manual Negotiation With A Specific Driver
-      socket.on("initiate_negotiation", async ({ orderId, driverId, amount, version, timestamp, nonce }, ack) => {
+      socket.on("initiate_negotiation", async ({ orderId, driverId, version, timestamp, nonce }, ack) => {
         try {
           if (!(await validateReplay(timestamp, nonce))) return ack({ success: false, message: "Security Violation: Replay Detected!" });
           const NegotiationService = require("../modules/negotiation/negotiation.service");
           
           const session = await NegotiationService.initiate(userId.toString(), { 
-            orderId, driverId, initialAmount: amount, version 
+            orderId, driverId, version 
           });
 
           // Join Both Participant Rooms For Real-time Sync
@@ -132,7 +132,7 @@ class SocketService {
 
           // Emit Negotiation Request To Driver
           this.io.to("driver_" + driverId).emit("new_negotiation_request", {
-            orderId, sessionId: session._id, userId, initialAmount: amount
+            orderId, sessionId: session._id, userId
           });
 
           ack({ success: true, sessionId: session._id });

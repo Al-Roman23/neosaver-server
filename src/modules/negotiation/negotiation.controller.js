@@ -6,14 +6,14 @@ class NegotiationController {
   async initiate(req, res, next) {
     try {
       const userId = req.user.id;
-      const { orderId, driverId, amount, version } = req.body;
+      const { orderId, driverId, version } = req.body;
 
-      if (!orderId || !driverId || !amount) {
+      if (!orderId || !driverId) {
         throw new (require("../../core/errors/errors")).BadRequest("Missing Required Negotiation Fields!");
       }
 
       const session = await NegotiationService.initiate(userId, { 
-        orderId, driverId, initialAmount: amount, version 
+        orderId, driverId, version 
       });
 
       res.status(201).json({

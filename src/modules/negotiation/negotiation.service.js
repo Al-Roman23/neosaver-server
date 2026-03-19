@@ -46,7 +46,7 @@ class NegotiationService {
   }
 
   // Initiate A New Negotiation Session With Analytics Handshake
-  async initiate(userId, { orderId, driverId, initialAmount, version }) {
+  async initiate(userId, { orderId, driverId, version }) {
     const session = client.startSession();
     try {
       let negotiationSession = null;
@@ -63,7 +63,7 @@ class NegotiationService {
           orderId,
           userId,
           driverId,
-          messages: [{ sender: "user", amount: initialAmount, timestamp: new Date() }],
+          messages: [],
           expiresAt: new Date(Date.now() + 60000), // 60s To Respond
         }, { session });
 
