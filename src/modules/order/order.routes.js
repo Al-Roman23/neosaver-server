@@ -10,10 +10,14 @@ const { verifyRole } = require("../../middlewares/verifyRole");
 router.get("/nearby", verifyAuthToken, verifyRole(["user"]), OrderController.getNearbyDrivers);
 router.post("/", verifyAuthToken, verifyRole(["user"]), OrderController.createOrder);
 
-// Active Management Phase (Shared Lifecycle)
-router.get("/active", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.getActiveOrder);
-router.get("/history", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.getOrderHistory);
+// Active Management Phase (User)
+router.get("/active", verifyAuthToken, verifyRole(["user"]), OrderController.getActiveOrder);
+router.get("/history", verifyAuthToken, verifyRole(["user"]), OrderController.getOrderHistory);
 router.delete("/:id", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.cancelOrder);
+
+// Active Management Phase (Driver Shared Tracking)
+router.get("/partner/active", verifyAuthToken, verifyRole(["driver"]), OrderController.getActiveOrderByPartner);
+router.get("/partner/history", verifyAuthToken, verifyRole(["driver"]), OrderController.getOrderHistoryByPartner);
 
 // Driver Action Flow Phase
 router.patch("/:id/arrived", verifyAuthToken, verifyRole(["driver"]), OrderController.markArrived);
