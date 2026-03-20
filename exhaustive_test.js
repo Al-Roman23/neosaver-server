@@ -2,8 +2,8 @@
 const io = require("socket.io-client");
 const axios = require("axios");
 
-const BASE_URL = "https://neosaver-server.onrender.com/v1/api";
-const SOCKET_URL = "https://neosaver-server.onrender.com";
+const BASE_URL = "http://localhost:5000/v1/api";
+const SOCKET_URL = "http://localhost:5000";
 
 async function runTest() {
   console.log("🚀 STARTING NEOSAVER CORE ENGINE: FINAL EXHAUSTIVE TEST...");
@@ -157,7 +157,7 @@ async function runTest() {
 
     // ==========================================
     // MULTI-ROUND BIDDING OPTIONS
-    // Change TEST_OPTION to "B" to Test Max Rounds Failure
+    // Change TEST_OPTION To "B" To Test Max Rounds Failure
     // ==========================================
     const TEST_OPTION = "A"; // "A" for Agreement, "B" for Max Rounds Failure
 

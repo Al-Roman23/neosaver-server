@@ -105,6 +105,25 @@ class PartnerController {
       next(error);
     }
   }
+
+  // Verify Partner Identity (Admin Action)
+  async verifyPartner(req, res, next) {
+    try {
+      const { id: partnerId } = req.params;
+      const { isVerified } = req.body;
+      const PartnerRepository = require("./partner.repository");
+
+      const updated = await PartnerRepository.verifyPartner(partnerId, isVerified);
+      if (updated.matchedCount === 0) throw new Error("Partner Not Found!");
+
+      res.status(200).json({
+        success: true,
+        message: `Partner Verification Status Changed To ${isVerified}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new PartnerController();

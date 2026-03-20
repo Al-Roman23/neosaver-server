@@ -38,12 +38,16 @@ The system is built as a **Modular Monolith**, segmented into **Bounded Contexts
 *   **MongoDB (Native Driver)**: High-speed document store utilizing **2dsphere Geospatial Indexes** for proximity search.
 *   **Socket.io**: Persistent bi-directional communication with **Namespace Partitioning**.
 *   **Pino**: Structured, ultra-fast logging with Correlation ID tracking.
+*   **Helmet.js**: Injects 11 military-grade HTTP security headers to prevent header spoofing.
+*   **Express-Rate-Limit**: Distributed DDoS protection tracking IP-based request velocity.
 
 #### **Security Hardening**
 *   **Replay Attack Defense**: Nonce-based security guards for all state-changing WebSocket events (Timestamp + Nonce validation).
 *   **JWT (Dual-Token Rotation)**: Secure Access and Refresh tokens for long-lived, high-security sessions.
 *   **Role-Based Access Control (RBAC)**: Strict permission guards for `user`, `driver`, and `admin` scopes.
 *   **Idempotency Enforcement**: Prevent duplicate transactions across the entire bidding lifecycle.
+*   **Admin Verification Engine**: All drivers default to `isVerified: false` until manually approved by Admin.
+*   **DDoS Protection**: Traffic window thresholding (100 req / 5 min) to protect database compute.
 
 ---
 

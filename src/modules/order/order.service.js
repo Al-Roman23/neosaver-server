@@ -28,7 +28,7 @@ class OrderService {
         $geoNear: {
           near: { type: "Point", coordinates: [parseFloat(pickupLng), parseFloat(pickupLat)] },
           distanceField: "dist.calculated",
-          query: { isOnline: true, currentOrderId: null, isAvailable: true, isNegotiating: { $ne: true } },
+          query: { isOnline: true, currentOrderId: null, isAvailable: true, isNegotiating: { $ne: true }, isVerified: true },
           spherical: true,
         },
       },

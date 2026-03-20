@@ -8,6 +8,7 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.insertOne({
       ...partnerData,
+      isVerified: false, // Security: Driver Must Be Manually Approved To Be Queried
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -24,6 +25,16 @@ class PartnerRepository {
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
       { $set: { isAvailable, currentStatus, updatedAt: new Date() } },
+      options
+    );
+  }
+
+  // Verify A Partner Manually (Admin Only)
+  async verifyPartner(partnerId, isVerified = true, options = {}) {
+    const partnersCollection = await getCollection("partners");
+    return partnersCollection.updateOne(
+      { _id: new ObjectId(partnerId) },
+      { $set: { isVerified, updatedAt: new Date() } },
       options
     );
   }
@@ -150,7 +161,7 @@ class PartnerRepository {
   // Find All Partners Who Are Currently Available
   async findAllAvailable() {
     const partnersCollection = await getCollection("partners");
-    return partnersCollection.find({ isAvailable: true }).toArray();
+    return partnersCollection.find({ isAvailable: true, isVerified: true }).toArray();
   }
 }
 

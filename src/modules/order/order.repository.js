@@ -95,7 +95,7 @@ class OrderRepository {
       status: Array.isArray(expectedStatus) ? { $in: expectedStatus } : expectedStatus 
     };
 
-    // Only Enforce partnerId If Already Assigned (States Post-negotiation)
+    // Only Enforce PartnerId If Already Assigned (States Post-negotiation)
     const assignedStates = ["accepted", "arrived", "pickup_started", "to_destination"];
     const isAssigned = Array.isArray(expectedStatus) 
       ? expectedStatus.some(s => assignedStates.includes(s))

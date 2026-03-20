@@ -13,6 +13,9 @@ router.get("/profile", verifyAuthToken, verifyRole(["driver"]), PartnerControlle
 router.put("/profile", verifyAuthToken, verifyRole(["driver"]), PartnerController.updateProfile);
 router.patch("/status", verifyAuthToken, verifyRole(["driver"]), PartnerController.updateStatus);
 
+// Admin Route -> Verify Driver Manually
+router.patch("/:id/verify", verifyAuthToken, verifyRole(["admin"]), PartnerController.verifyPartner);
+
 // Configure Multer To Store File Buffers In Memory
 const multer = require("multer");
 const { BadRequest } = require("../../core/errors/errors");

@@ -21,6 +21,7 @@ class SocketService {
         origin: "*",
         methods: ["GET", "POST"],
       },
+      connectTimeout: 5000, // Defends against slowloris/spam hanging connections
     });
 
     // Authentication Middleware For Websockets
@@ -175,7 +176,7 @@ class SocketService {
              return ack({ success: true });
           }
           
-          // Add Message (Target Document Has status: 'active' and 'lastSequence' Guard)
+          // Add Message (Target Document Has Status: 'Active' And 'LastSequence' Guard)
           const updatedSession = await NegotiationRepository.addMessage(sessionId, {
             sender: socket.userId.toString() === session.userId.toString() ? "user" : "driver",
             amount,

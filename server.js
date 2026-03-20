@@ -11,8 +11,22 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Apply Global Middleware
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+
+app.use(helmet()); // 11 Military-Grade Security Headers
 app.use(cors());
 app.use(express.json());
+
+// Global API Rate Limiter: Max 100 Requests Per 15 Minutes Per IP
+const apiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 100, 
+  message: { success: false, error: "Too Many Requests! Please Try Again Later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/v1/api", apiLimiter);
 
 // Health Check Endpoint
 app.get("/health", async (req, res) => {
