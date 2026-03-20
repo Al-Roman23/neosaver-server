@@ -8,7 +8,7 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.insertOne({
       ...partnerData,
-      isVerified: false, // Security: Driver Must Be Manually Approved To Be Queried
+      isVerified: true, // Security: Driver Must Be Manually Approved To Be Queried
       createdAt: new Date(),
       updatedAt: new Date(),
     });

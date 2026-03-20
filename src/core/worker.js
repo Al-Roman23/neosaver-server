@@ -30,7 +30,7 @@ class BackgroundWorker {
       await lockCollection.insertOne({ lockKey, createdAt: new Date() });
       
       const now = new Date();
-      logger.info("Executing Global Reconciliation Pulse (Distributed Lock Acquired)");
+      logger.info("Executing Global Reconciliation Pulse (Distributed Lock Acquired)!");
 
       // 2. Perform Parallel Reconciliation Tasks
       await Promise.allSettled([

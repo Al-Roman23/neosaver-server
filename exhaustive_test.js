@@ -1,4 +1,4 @@
-// This File Handles The Exhaustive End-to-End Testing Of The NeoSaver Negotiation Engine
+// This File Handles The Exhaustive End-To-End Testing Of The NeoSaver Core Engine
 const io = require("socket.io-client");
 const axios = require("axios");
 
@@ -126,7 +126,7 @@ async function runTest() {
     // Start Listening For The Request BEFORE Initiating
     const negotiationRequestReceived = new Promise((resolve) => {
       dSocket.once("new_negotiation_request", (data) => {
-        console.log("✅ Driver Side: Received new_negotiation_request!");
+        console.log("✅ Driver Side: Received New Negotiation Request!");
         resolve(data);
       });
     });
@@ -159,7 +159,7 @@ async function runTest() {
     // MULTI-ROUND BIDDING OPTIONS
     // Change TEST_OPTION To "B" To Test Max Rounds Failure
     // ==========================================
-    const TEST_OPTION = "A"; // "A" for Agreement, "B" for Max Rounds Failure
+    const TEST_OPTION = "A"; // "A" For Agreement, "B" For Max Rounds Failure
 
     console.log(`🔄 Step: Simulating Multi-Round Bidding Interplay (Running Option ${TEST_OPTION})...`);
     
@@ -204,8 +204,8 @@ async function runTest() {
       console.log("🔄 Step: Failing Negotiation...");
       const rejectAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "reject", sequence: 8, ...generateSecurity() }, r));
       if (!rejectAck.success) throw new Error("Rejection Closure Failed!");
-      console.log("✅ NEGOTIATION REJECTED & TRACKED. Ending Test Gracefully for Option B.");
-      process.exit(0); // Exit here since we can't do the trip if they rejected
+      console.log("✅ NEGOTIATION REJECTED & TRACKED. Ending Test Gracefully For Option B.");
+      process.exit(0); // Exit Here Since We Can't Do The Trip If They Rejected
     }
 
     // ---------------------------------------------------------

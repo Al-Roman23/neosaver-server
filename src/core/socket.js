@@ -21,7 +21,7 @@ class SocketService {
         origin: "*",
         methods: ["GET", "POST"],
       },
-      connectTimeout: 5000, // Defends against slowloris/spam hanging connections
+      connectTimeout: 5000, // Defends Against Slowloris/Spam Hanging Connections
     });
 
     // Authentication Middleware For Websockets
