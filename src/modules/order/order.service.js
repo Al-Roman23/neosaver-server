@@ -138,9 +138,10 @@ class OrderService {
       throw new NotFound("Order Not Found!");
     }
 
-    // Role-based Access Control Registry
-    const isUser = order.userId.toString() === requestUserId;
-    const isDriver = order.partnerId && order.partnerId.toString() === requestUserId;
+    // Role-based Access Control Registry (Stringify IDs For Strict Comparison)
+    const normalizedReqId = requestUserId.toString();
+    const isUser = order.userId.toString() === normalizedReqId;
+    const isDriver = order.partnerId && order.partnerId.toString() === normalizedReqId;
     const isAdmin = requestUserRole === "admin";
 
     // Shield Data From Non-participants
