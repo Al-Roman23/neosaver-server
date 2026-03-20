@@ -159,7 +159,7 @@ async function runTest() {
     // MULTI-ROUND BIDDING OPTIONS
     // Change TEST_OPTION to "B" to Test Max Rounds Failure
     // ==========================================
-    const TEST_OPTION = "B"; // "A" for Agreement, "B" for Max Rounds Failure
+    const TEST_OPTION = "A"; // "A" for Agreement, "B" for Max Rounds Failure
 
     console.log(`🔄 Step: Simulating Multi-Round Bidding Interplay (Running Option ${TEST_OPTION})...`);
     

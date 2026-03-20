@@ -45,7 +45,8 @@ class OrderController {
   async getOrderHistory(req, res, next) {
     try {
       const userId = req.user.id;
-      const orders = await OrderService.getOrderHistory(userId);
+      const { status } = req.query; // Optional Status Filter
+      const orders = await OrderService.getOrderHistory(userId, status);
 
       res.status(200).json({
         success: true,
@@ -162,7 +163,8 @@ class OrderController {
   async getOrderHistoryByPartner(req, res, next) {
     try {
       const partnerId = req.user.id;
-      const orders = await OrderService.getOrderHistoryByPartner(partnerId);
+      const { status } = req.query; // Optional Status Filter
+      const orders = await OrderService.getOrderHistoryByPartner(partnerId, status);
 
       res.status(200).json({
         success: true,

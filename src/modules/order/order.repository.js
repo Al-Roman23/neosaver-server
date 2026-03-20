@@ -142,19 +142,25 @@ class OrderRepository {
     });
   }
 
-  // History And History By Driver Remain Same (Standard Sort)
-  async findHistoryByUserId(userId) {
+  // History And History By Driver Remain Same (Standard Sort, Optional Filtering)
+  async findHistoryByUserId(userId, statusFilter = null) {
     const ordersCollection = await getCollection("orders");
+    const query = { userId: new ObjectId(userId) };
+    if (statusFilter) query.status = statusFilter;
+
     return ordersCollection
-      .find({ userId: new ObjectId(userId) })
+      .find(query)
       .sort({ createdAt: -1 })
       .toArray();
   }
 
-  async findHistoryByPartnerId(partnerId) {
+  async findHistoryByPartnerId(partnerId, statusFilter = null) {
     const ordersCollection = await getCollection("orders");
+    const query = { partnerId: new ObjectId(partnerId) };
+    if (statusFilter) query.status = statusFilter;
+
     return ordersCollection
-      .find({ partnerId: new ObjectId(partnerId) })
+      .find(query)
       .sort({ createdAt: -1 })
       .toArray();
   }

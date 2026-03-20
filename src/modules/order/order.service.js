@@ -187,16 +187,16 @@ class OrderService {
     return OrderRepository.findActiveByUserId(userId);
   }
 
-  async getOrderHistory(userId) {
-    return OrderRepository.findHistoryByUserId(userId);
+  async getOrderHistory(userId, status) {
+    return OrderRepository.findHistoryByUserId(userId, status);
   }
 
   async getActiveOrderByPartner(partnerId) {
     return OrderRepository.findActiveByPartnerId(partnerId);
   }
 
-  async getOrderHistoryByPartner(partnerId) {
-    return OrderRepository.findHistoryByPartnerId(partnerId);
+  async getOrderHistoryByPartner(partnerId, status) {
+    return OrderRepository.findHistoryByPartnerId(partnerId, status);
   }
 }
 
