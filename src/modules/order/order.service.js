@@ -131,6 +131,26 @@ class OrderService {
     }
   }
 
+  // Get Detailed Information For A Single Order (User/Partner/Admin Participant Only)
+  async getOrderDetails(orderId, requestUserId, requestUserRole) {
+    const order = await OrderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFound("Order Not Found!");
+    }
+
+    // Role-based Access Control Registry
+    const isUser = order.userId.toString() === requestUserId;
+    const isDriver = order.partnerId && order.partnerId.toString() === requestUserId;
+    const isAdmin = requestUserRole === "admin";
+
+    // Shield Data From Non-participants
+    if (!isUser && !isDriver && !isAdmin) {
+      throw new BadRequest("Access Denied: You Are Not A Participant Of This Order.");
+    }
+
+    return order;
+  }
+
   // Driver Arrives — Still Locked By Partner Id
   async markArrived(orderId, partnerId) {
     const updated = await OrderRepository.updateStatusWithGuard(orderId, partnerId, "accepted", "arrived");

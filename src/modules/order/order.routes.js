@@ -13,6 +13,7 @@ router.post("/", verifyAuthToken, verifyRole(["user"]), OrderController.createOr
 // Active Management Phase (User)
 router.get("/active", verifyAuthToken, verifyRole(["user"]), OrderController.getActiveOrder);
 router.get("/history", verifyAuthToken, verifyRole(["user"]), OrderController.getOrderHistory);
+router.get("/:id", verifyAuthToken, OrderController.getOrderDetails);
 router.delete("/:id", verifyAuthToken, verifyRole(["user", "driver"]), OrderController.cancelOrder);
 
 // Active Management Phase (Driver Shared Tracking)

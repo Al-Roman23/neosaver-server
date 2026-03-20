@@ -119,6 +119,14 @@ async function runTest() {
     otpCode = oRes.data.data.otp.code;
     console.log("✅ Order Document Created (Status: Pending, Version: 1)");
 
+    // Verify Individual Order Fetch (HTTP GET /orders/:id)
+    const fetchRes = await axios.get(`${BASE_URL}/orders/${orderId}`, { headers: { Authorization: `Bearer ${userToken}` } });
+    if (fetchRes.data.success && fetchRes.data.data._id === orderId) {
+      console.log("✅ Order Detail Fetch Verified (GET /orders/:id)!");
+    } else {
+      throw new Error("Order Detail Fetch Failed Verification!");
+    }
+
     // User Connects Socket
     const uSocket = io(SOCKET_URL, { auth: { token: userToken } });
     await new Promise(r => uSocket.on("connect", r));

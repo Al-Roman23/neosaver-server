@@ -89,6 +89,24 @@ class OrderController {
     }
   }
 
+  // Get Comprehensive Details For A Specific Order Id
+  async getOrderDetails(req, res, next) {
+    try {
+      const { id: orderId } = req.params;
+      const userId = req.user.id;
+      const role = req.user.role;
+
+      const order = await OrderService.getOrderDetails(orderId, userId, role);
+
+      res.status(200).json({
+        success: true,
+        data: order,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Start Trip — Requires OTP Verification From User Device
   async startTrip(req, res, next) {
     try {
