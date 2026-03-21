@@ -52,6 +52,7 @@ class OrderService {
           $match: {
             $or: [
               { isOnline: true },
+              { currentStatus: "online" }, // Fallback For Inconsistent Boolean State
               {
                 isAppInBackground: true,
                 lastAppHeartbeatAt: { $gt: new Date(Date.now() - 5 * 60 * 1000) } // 5 Minute Grace Period
@@ -60,12 +61,12 @@ class OrderService {
             currentOrderId: null,
             isAvailable: true,
             isNegotiating: { $ne: true },
-            isVerified: true,
+            isVerified: { $ne: false }, // Allow True Or Inherited True From Creation
             ...(excludeIds.length > 0 ? { _id: { $nin: excludeIds } } : {})
           }
         },
         { $limit: 10 },
-        { $project: { _id: 1, name: 1, ambulanceType: 1, vehicleNumber: 1, "dist.calculated": 1 } }
+        { $project: { _id: 1, name: 1, ambulanceType: 1, vehicleNumber: 1, completedOrderCount: 1, rating: 1, "dist.calculated": 1 } }
       ];
       return pipeline;
     };
