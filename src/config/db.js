@@ -72,6 +72,8 @@ async function ensureIndexes() {
     // 5. MISSION CRITICAL: Partners (Geo + Locking)
     await safeIndex("partners", { email: 1 }, { unique: true });
     await safeIndex("partners", { userId: 1 }, { unique: true });
+    await safeIndex("partners", { nationalId: 1 }, { unique: true });
+    await safeIndex("partners", { driverLicenseNumber: 1 }, { unique: true });
     await safeIndex("partners", { location: "2dsphere" });
     await safeIndex("partners", { isOnline: 1, currentOrderId: 1, isAvailable: 1, isNegotiating: 1 });
     await safeIndex("partners", { isNegotiating: 1 }, { partialFilterExpression: { isNegotiating: true } });

@@ -74,6 +74,12 @@ class NegotiationRepository {
       options
     );
   }
+
+  // Find Any Negotiation Session By Order Id (For History/Analytics)
+  async findByOrderId(orderId) {
+    const collection = await getCollection("negotiation_sessions");
+    return collection.findOne({ orderId: new ObjectId(orderId) });
+  }
 }
 
 module.exports = new NegotiationRepository();

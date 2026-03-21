@@ -171,6 +171,27 @@ class NegotiationService {
       await dbSession.endSession();
     }
   }
+
+  // Retrieve Full Bidding Transcript For Auditing (Admins)
+  async getHistory(orderId) {
+    // 1. Try Finding Active Session First
+    let session = await NegotiationRepository.findActiveByOrderId(orderId);
+    
+    // 2. If Not Active, Look Up The Order's Historical Archive
+    if (!session) {
+      const order = await OrderRepository.findById(orderId);
+      if (order && order.negotiationHistory && order.negotiationHistory.length > 0) {
+        // Get The Latest Negotiation Attached To This Order
+        const lastSessionId = order.negotiationHistory[order.negotiationHistory.length - 1];
+        session = await NegotiationRepository.findById(lastSessionId);
+      }
+    }
+
+    if (!session) {
+      throw new (require("../../core/errors/errors")).NotFound("No Bidding Cycle Found For This Order!");
+    }
+    return session;
+  }
 }
 
 module.exports = new NegotiationService();

@@ -12,7 +12,7 @@ async function runTest() {
   const timestamp = Date.now();
   const userEmail = `user${timestamp}@test.com`;
   const driverEmail = `driver${timestamp}@test.com`;
-  const password = "Password123!";
+  const password = "Password23!";
 
   // Replay Attack Helpers
   const generateSecurity = () => ({ timestamp: Date.now(), nonce: Math.random().toString(36).substring(7) });
@@ -59,7 +59,7 @@ async function runTest() {
     console.log("✅ User Profile Management Verified!");
 
     // ---------------------------------------------------------
-    // 3. PARTNER DOMAIN (DRIVER ONBOARDING)
+    // 3. PARTNER DOMAIN -> DRIVER ONBOARDING
     // ---------------------------------------------------------
     console.log("\n--- [3] Partner Domain (Onboarding) ---");
     const driverReg = await axios.post(`${BASE_URL}/auth/register`, {
@@ -71,12 +71,13 @@ async function runTest() {
     driverId = driverReg.data.data.user._id;
     console.log("✅ Driver Registered (" + driverEmail + ")");
 
+    const uniqueId = Math.floor(Math.random() * 100000);
     await axios.post(`${BASE_URL}/partner/details`, {
       ambulanceType: "ICU Support",
-      licenseNumber: "LIC-00-99",
-      roadTaxToken: "TAX-2026-OK",
-      nationalId: "NID-999-000",
-      vehicleNumber: "DHK-99-88",
+      licenseNumber: `LIC-${uniqueId}`,
+      roadTaxToken: `TAX-${uniqueId}`,
+      nationalId: `NID-${uniqueId}`,
+      vehicleNumber: `DHK-${uniqueId}`,
       coverageArea: "Dhaka City",
       contactNumber: `+88019${Math.floor(10000000 + Math.random() * 90000000)}`,
       email: driverEmail,
@@ -107,7 +108,7 @@ async function runTest() {
     console.log(`💰 Estimated Fare: ${surge.estimatedFare} BDT`);
 
     // ---------------------------------------------------------
-    // 5. NEGOTIATION ENGINE (MULTI-ROUND BIDDING)
+    // 5. NEGOTIATION ENGINE -> MULTI-ROUND BIDDING
     // ---------------------------------------------------------
     console.log("\n--- [5] Core Negotiation Engine (Bidding) ---");
     // Create Pending Order
@@ -119,7 +120,7 @@ async function runTest() {
     otpCode = oRes.data.data.otp.code;
     console.log("✅ Order Document Created (Status: Pending, Version: 1)");
 
-    // Verify Individual Order Fetch (HTTP GET /orders/:id)
+    // Verify Individual Order Fetch (http GET /orders/:id)
     const fetchRes = await axios.get(`${BASE_URL}/orders/${orderId}`, { headers: { Authorization: `Bearer ${userToken}` } });
     if (fetchRes.data.success && fetchRes.data.data._id === orderId) {
       console.log("✅ Order Detail Fetch Verified (GET /orders/:id)!");
@@ -143,7 +144,7 @@ async function runTest() {
           throw new Error("Proactive Order+User Data Missing From Socket Event!");
         }
 
-        // Verify Access Relaxation: Driver must be able to GET the order during negotiation
+        // Verify Access Relaxation: Driver Must Be Able To GET The Order During Negotiation
         try {
           const dFetch = await axios.get(`${BASE_URL}/orders/${orderId}`, { headers: { Authorization: `Bearer ${driverToken}` } });
           if (dFetch.data.success && dFetch.data.data.user.name) {
@@ -239,9 +240,20 @@ async function runTest() {
     // ---------------------------------------------------------
     console.log("\n--- [6] OTP & Secure Pickup Workflow ---");
     
+    // Listen for arrival notification with OTP
+    const arrivalNotification = new Promise((resolve) => {
+      uSocket.once("driver_arrived", (data) => {
+        console.log(`✅ User Side: Arrival Notification Received (OTP: ${data.otp})!`);
+        resolve(data);
+      });
+    });
+
     // Arrival
     await axios.patch(`${BASE_URL}/orders/${orderId}/arrived`, {}, { headers: { Authorization: `Bearer ${driverToken}` } });
     console.log("📍 Driver: MARKED ARRIVED.");
+
+    const notificationData = await arrivalNotification;
+    if (notificationData.otp !== otpCode) throw new Error("Incorrect OTP Received In Notification!");
 
     // OTP FAILURE TEST
     console.log("🔄 Step: Verifying OTP Security Guard (Incorrect Code)...");
@@ -278,6 +290,29 @@ async function runTest() {
       feedback: "Negotiation Engine is flawless!" 
     }, { headers: { Authorization: `Bearer ${userToken}` } });
     console.log("✅ Feedback Loop Complete!");
+
+    // ---------------------------------------------------------
+    // 7. ADMIN AUDIT & ANALYTICS
+    // ---------------------------------------------------------
+    console.log("\n--- [7] Admin Audit & Analytics ---");
+    
+    // Register Admin
+    const adminEmail = `admin${Math.floor(Math.random() * 10000000000000)}@test.com`;
+    const adminReg = await axios.post(`${BASE_URL}/auth/register`, {
+      name: "Neo Admin", firstName: "Neo", lastName: "Admin",
+      email: adminEmail, phone: `+88015${Math.floor(10000000 + Math.random() * 90000000)}`,
+      password: "Password123!", address: "Dhaka", postCode: "1000", role: "admin", acceptedTerms: true
+    });
+    const adminToken = adminReg.data.data.accessToken;
+    console.log("✅ Admin Registered For Auditing.");
+
+    // Verify Negotiation History Endpoint (Admin Only)
+    const audit = await axios.get(`${BASE_URL}/negotiations/history/${orderId}`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    if (audit.data.success && audit.data.data.messages.length > 0) {
+      console.log(`✅ Admin Audit Verified: Retrieved Bidding Transcript (${audit.data.data.messages.length} Messages).`);
+    } else {
+      throw new Error("Admin Audit Failed To Retrieve Negotiation History!");
+    }
 
     // ---------------------------------------------------------
     // SUMMARY & EXIT

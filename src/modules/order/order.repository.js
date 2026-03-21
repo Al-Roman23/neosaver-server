@@ -39,6 +39,7 @@ class OrderRepository {
           negotiationId: new ObjectId(negotiationId),
           updatedAt: new Date() 
         },
+        $push: { negotiationHistory: new ObjectId(negotiationId) },
         $inc: { version: 1 }
       },
       { returnDocument: "after", ...options }

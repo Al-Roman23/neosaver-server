@@ -16,6 +16,22 @@ class PartnerService {
       throw new Conflict("You Have Already Submitted Your Partner Details!");
     }
 
+    // Check Uniqueness For Mission-Critical Documents (NID & License)
+    const { getCollection } = require("../../config/db");
+    const partnersCollection = await getCollection("partners");
+
+    const nidExists = await partnersCollection.findOne({ nationalId: details.nationalId });
+    if (nidExists) {
+      const { Conflict } = require("../../core/errors/errors");
+      throw new Conflict("This National ID (NID) Is Already Registered To Another Driver!");
+    }
+
+    const licenseExists = await partnersCollection.findOne({ driverLicenseNumber: details.licenseNumber });
+    if (licenseExists) {
+      const { Conflict } = require("../../core/errors/errors");
+      throw new Conflict("This Driver License Number Is Already Registered!");
+    }
+
     const partnerData = {
       userId,
       ambulanceType: details.ambulanceType,

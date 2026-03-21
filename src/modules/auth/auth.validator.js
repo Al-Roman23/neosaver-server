@@ -27,7 +27,7 @@ function validateRegister(data) {
     throw new BadRequest("Password Must Be At Least 6 Characters Long!");
   }
 
-  if (role !== "user" && role !== "driver") {
+  if (role !== "user" && role !== "driver" && role !== "admin") {
     throw new BadRequest("Invalid User Role Assigned!");
   }
 }

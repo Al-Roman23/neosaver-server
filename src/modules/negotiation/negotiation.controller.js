@@ -25,6 +25,20 @@ class NegotiationController {
       next(error);
     }
   }
+
+  // Admin Tool: Get Full Bidding History For An Order
+  async getHistory(req, res, next) {
+    try {
+      const { orderId } = req.params;
+      const session = await NegotiationService.getHistory(orderId);
+      res.json({
+        success: true,
+        data: session,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new NegotiationController();

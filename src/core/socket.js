@@ -101,10 +101,25 @@ class SocketService {
             // Sync Location To Order Document (Reopen-App Safety)
             await OrderRepository.updateDriverLocation(orderId, lng, lat);
             
-            // Broadcast Live Push To The Dedicated Order Room
+            // Broadcast Live Push To The Dedicated Order Room (With Distance Proximity Metadata)
+            const order = await OrderRepository.findById(orderId);
+            const pickup = order.pickupLocation.coordinates;
+            
+            // Simple Spherical Earth Distance (Approximate meters)
+            const R = 6371e3;
+            const φ1 = lat * Math.PI/180;
+            const φ2 = pickup[1] * Math.PI/180;
+            const Δφ = (pickup[1]-lat) * Math.PI/180;
+            const Δλ = (pickup[0]-lng) * Math.PI/180;
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distanceMeters = Math.round(R * c);
+
             this.io.to("order_" + orderId).emit("trip_location_update", {
               lat,
               lng,
+              distanceMeters,
+              estimateArrivalMins: Math.ceil((distanceMeters / 1000) * 2), // Conservative 2min/km Estimate
               timestamp: now
             });
           }

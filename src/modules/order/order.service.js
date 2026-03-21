@@ -171,13 +171,25 @@ class OrderService {
     return result;
   }
 
-  // Driver Arrives — Still Locked By Partner Id
+  // Driver Arrives — Notify User With Secure OTP Proactively
   async markArrived(orderId, partnerId) {
     const updated = await OrderRepository.updateStatusWithGuard(orderId, partnerId, "accepted", "arrived");
     if (!updated) throw new BadRequest("Invalid State Or Access Denied!");
 
+    // Fetch Full Record To Extract User ID And OTP For Notification
+    const order = await OrderRepository.findById(orderId);
     const socketService = require("../../core/socket");
+    
+    // Broadcast Status Update To Trip Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "arrived" });
+
+    // Proactively Push Specific Arrival Notification To User (With OTP)
+    socketService.sendToUser(order.userId.toString(), "driver_arrived", {
+      message: "Your Driver Has Arrived! Provide The OTP To Start Trip Safely.",
+      otp: order.otp.code,
+      orderId: order._id
+    });
+
     return updated;
   }
 

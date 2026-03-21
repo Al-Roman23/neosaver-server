@@ -8,4 +8,7 @@ const { verifyRole } = require("../../middlewares/verifyRole");
 // Only Users Can Initiate A Negotiation Handshake
 router.post("/initiate", verifyAuthToken, verifyRole(["user"]), NegotiationController.initiate);
 
+// Admin Audit: Retrieve Full Bidding Transcript
+router.get("/history/:orderId", verifyAuthToken, verifyRole(["admin"]), NegotiationController.getHistory);
+
 module.exports = router;
