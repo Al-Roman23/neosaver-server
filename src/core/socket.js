@@ -123,6 +123,10 @@ class SocketService {
             orderId, driverId, version 
           });
 
+          // Fetch Combined Order + Limited User Profile For Driver UI
+          const OrderService = require("../modules/order/order.service");
+          const combinedOrder = await OrderService.getOrderDetails(orderId, driverId, "driver");
+
           // Join Both Participant Rooms For Real-time Sync
           socket.join("order_" + orderId);
           const driverSocketId = this.users.get(driverId.toString());
@@ -131,9 +135,12 @@ class SocketService {
              if (driverSocket) driverSocket.join("order_" + orderId);
           }
 
-          // Emit Negotiation Request To Driver
+          // Emit Negotiation Request To Driver (Include Combined Payload For Latency Reduction)
           this.io.to("driver_" + driverId).emit("new_negotiation_request", {
-            orderId, sessionId: session._id, userId
+            orderId, 
+            sessionId: session._id, 
+            userId,
+            order: combinedOrder
           });
 
           ack({ success: true, sessionId: session._id });

@@ -133,8 +133,26 @@ async function runTest() {
 
     // Start Listening For The Request BEFORE Initiating
     const negotiationRequestReceived = new Promise((resolve) => {
-      dSocket.once("new_negotiation_request", (data) => {
+      dSocket.once("new_negotiation_request", async (data) => {
         console.log("✅ Driver Side: Received New Negotiation Request!");
+
+        // Verify Combined Payload (Proactive Data Injection)
+        if (data.order && data.order.user && data.order.user.name) {
+          console.log(`✅ Driver Side: Proactive Data Received (User: ${data.order.user.name})!`);
+        } else {
+          throw new Error("Proactive Order+User Data Missing From Socket Event!");
+        }
+
+        // Verify Access Relaxation: Driver must be able to GET the order during negotiation
+        try {
+          const dFetch = await axios.get(`${BASE_URL}/orders/${orderId}`, { headers: { Authorization: `Bearer ${driverToken}` } });
+          if (dFetch.data.success && dFetch.data.data.user.name) {
+            console.log("✅ Access Relaxation Verified: Negotiating Driver Can Fetch Order!");
+          }
+        } catch (e) {
+          throw new Error("Access Relaxation Failed: Driver Still Blocked During Negotiation!");
+        }
+
         resolve(data);
       });
     });

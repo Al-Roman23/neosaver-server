@@ -131,8 +131,11 @@ class OrderService {
     }
   }
 
-  // Get Detailed Information For A Single Order (User/Partner/Admin Participant Only)
+  // Get Detailed Information For A Single Order (Includes Non-Sensitive User Profile)
   async getOrderDetails(orderId, requestUserId, requestUserRole) {
+    const UserRepository = require("../user/user.repository");
+    const NegotiationRepository = require("../negotiation/negotiation.repository");
+
     const order = await OrderRepository.findById(orderId);
     if (!order) {
       throw new NotFound("Order Not Found!");
@@ -144,12 +147,28 @@ class OrderService {
     const isDriver = order.partnerId && order.partnerId.toString() === normalizedReqId;
     const isAdmin = requestUserRole === "admin";
 
+    // Access Extension: Allow Drivers Who Are In An Active Negotiation Session For This Order
+    let isNegotiator = false;
+    if (order.status === "negotiating" && order.negotiationId) {
+      const session = await NegotiationRepository.findById(order.negotiationId);
+      if (session && session.driverId.toString() === normalizedReqId) {
+        isNegotiator = true;
+      }
+    }
+
     // Shield Data From Non-participants
-    if (!isUser && !isDriver && !isAdmin) {
+    if (!isUser && !isDriver && !isAdmin && !isNegotiator) {
       throw new BadRequest("Access Denied: You Are Not A Participant Of This Order.");
     }
 
-    return order;
+    // Join Limited User Profile (Safety: Name Only Before Trip Accepted)
+    const user = await UserRepository.findById(order.userId);
+    const result = {
+      ...order,
+      user: user ? { name: user.name, firstName: user.firstName, lastName: user.lastName } : null
+    };
+
+    return result;
   }
 
   // Driver Arrives — Still Locked By Partner Id
