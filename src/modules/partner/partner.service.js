@@ -99,7 +99,7 @@ class PartnerService {
         lastLocationUpdate: partner.lastLocationUpdate,
         lastSocketConnectedAt: partner.lastSocketConnectedAt,
         rating: partner.rating,
-        totalTrips: partner.totalTrips,
+        completedOrderCount: await (require("../order/order.repository").countCompletedByPartnerId(userId)),
         createdAt: partner.createdAt,
         updatedAt: partner.updatedAt,
       },

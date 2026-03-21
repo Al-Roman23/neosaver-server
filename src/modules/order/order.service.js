@@ -223,12 +223,14 @@ class OrderService {
       const driverUser = await UserRepository.findById(order.partnerId.toString());
 
       if (partnerData && driverUser) {
+        const completedCount = await OrderRepository.countCompletedByPartnerId(order.partnerId.toString());
         partner = {
           ...partnerData,
           name: driverUser.name,
           firstName: driverUser.firstName,
           lastName: driverUser.lastName,
-          phone: driverUser.phone
+          phone: driverUser.phone,
+          completedOrderCount: completedCount
         };
       }
     }
