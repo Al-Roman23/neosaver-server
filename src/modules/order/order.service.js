@@ -164,10 +164,12 @@ class OrderService {
         }
 
         // Unlock Driver Completely
-        if (order.partnerId) {
-          await PartnerRepository.unlockDriver(order.partnerId.toString(), { session: dbSession });
+        const driverToUnlock = order.partnerId ? order.partnerId.toString() : (cancelBy === "driver" ? normalizedUserId : null);
+        
+        if (driverToUnlock) {
+          await PartnerRepository.unlockDriver(driverToUnlock, { session: dbSession });
           const socketService = require("../../core/socket");
-          socketService.io.to("driver_" + order.partnerId.toString()).emit("order_cancelled", { orderId, by: cancelBy });
+          socketService.io.to("driver_" + driverToUnlock).emit("order_cancelled", { orderId, by: cancelBy });
           socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
         }
 
