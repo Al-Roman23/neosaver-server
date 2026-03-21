@@ -67,8 +67,19 @@ class OrderService {
         },
         { $limit: 10 },
         {
+          $lookup: {
+            from: "orders",
+            let: { partner_uid: "$userId" },
+            pipeline: [
+              { $match: { $expr: { $and: [ { $eq: ["$partnerId", "$$partner_uid"] }, { $eq: ["$status", "completed"] } ] } } },
+              { $project: { _id: 1 } }
+            ],
+            as: "completedTrips"
+          }
+        },
+        {
           $addFields: {
-            completedOrderCount: { $ifNull: ["$completedOrderCount", 0] },
+            completedOrderCount: { $size: "$completedTrips" },
             rating: { $ifNull: ["$rating", 0] }
           }
         },
