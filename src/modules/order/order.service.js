@@ -299,9 +299,11 @@ class OrderService {
     return updated;
   }
 
-  // Get Active Order Support For Current Session Sync
+  // Get Active Order Support For Current Session Sync (Includes Populated Driver Details)
   async getActiveOrder(userId) {
-    return OrderRepository.findActiveByUserId(userId);
+    const activeOrder = await OrderRepository.findActiveByUserId(userId);
+    if (!activeOrder) return null;
+    return this.getOrderDetails(activeOrder._id, userId, "user");
   }
 
   async getOrderHistory(userId, status) {
