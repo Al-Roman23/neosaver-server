@@ -10,6 +10,9 @@ const { errorHandler } = require("./src/middlewares/errorHandler");
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Enable Proxy Trust For Hosting Environments Like Render/Heroku
+app.set("trust proxy", 1);
+
 // Apply Global Middleware
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
