@@ -68,9 +68,9 @@ class OrderService {
         {
           $lookup: {
             from: "orders",
-            let: { partner_uid: "$userId" },
+            let: { partner_uid: { $toString: "$userId" } },
             pipeline: [
-              { $match: { $expr: { $and: [ { $eq: [{ $toObjectId: "$partnerId" }, "$$partner_uid"] }, { $eq: ["$status", "completed"] } ] } } },
+              { $match: { $expr: { $and: [ { $eq: [{ $toString: "$partnerId" }, "$$partner_uid"] }, { $eq: ["$status", "completed"] } ] } } },
               { $project: { _id: 1 } }
             ],
             as: "completedTrips"
