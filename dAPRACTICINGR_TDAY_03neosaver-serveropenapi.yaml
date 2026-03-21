@@ -1,0 +1,22 @@
+
+  /app-state:
+    post:
+      summary: Synchronize frontend app background/foreground state (Socket Trigger)
+      description: This documentation represents the logical socket event 'app_state_change'. The frontend should emit this via WebSocket.
+      tags: [System Logic]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state:
+                  type: string
+                  enum: [foreground, background]
+      responses:
+        '200':
+          description: State synchronized successfully

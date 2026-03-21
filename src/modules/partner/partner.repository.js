@@ -9,6 +9,8 @@ class PartnerRepository {
     return partnersCollection.insertOne({
       ...partnerData,
       isVerified: true, // Security: Driver Must Be Manually Approved To Be Queried
+      isAppInBackground: false, // Core: Manage Background Grace Period
+      lastAppHeartbeatAt: new Date(), // Core: Dead Man's Switch Pulse
       createdAt: new Date(),
       updatedAt: new Date(),
     });

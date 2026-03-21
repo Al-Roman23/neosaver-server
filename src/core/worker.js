@@ -36,7 +36,8 @@ class BackgroundWorker {
       await Promise.allSettled([
         this.clearStaleNegotiationLocks(),
         this.reconcileExpiredSessions(now),
-        this.reconcileGhostTrips()
+        this.reconcileGhostTrips(),
+        this.reconcileBackgroundGracePeriods()
       ]);
 
     } catch (err) {
@@ -46,6 +47,38 @@ class BackgroundWorker {
     } finally {
       // Release Lock For The Next Pulse
       await lockCollection.deleteOne({ lockKey }).catch(() => { });
+    }
+  }
+
+  // Task: Release Drivers With Stale Background Grace Periods (10+ Mins)
+  async reconcileBackgroundGracePeriods() {
+    try {
+      const { getCollection } = require("../config/db");
+      const partnersCollection = await getCollection("partners");
+      
+      const staleThreshold = new Date(Date.now() - 10 * 60 * 1000); // 10 Minutes Dead Man Switch
+      const result = await partnersCollection.updateMany(
+        { 
+          $or: [
+            { isOnline: true },
+            { isAppInBackground: true }
+          ],
+          lastAppHeartbeatAt: { $lt: staleThreshold }
+        },
+        { 
+          $set: { 
+            isOnline: false, 
+            isAppInBackground: false, 
+            updatedAt: new Date() 
+          } 
+        }
+      );
+
+      if (result.modifiedCount > 0) {
+        logger.info({ count: result.modifiedCount }, "Reconciled Stale Driver Background States!");
+      }
+    } catch (err) {
+      logger.error({ err }, "Background State Reconciliation Failed!");
     }
   }
 

@@ -50,7 +50,13 @@ class OrderService {
         },
         {
           $match: {
-            isOnline: true,
+            $or: [
+              { isOnline: true },
+              {
+                isAppInBackground: true,
+                lastAppHeartbeatAt: { $gt: new Date(Date.now() - 5 * 60 * 1000) } // 5 Minute Grace Period
+              }
+            ],
             currentOrderId: null,
             isAvailable: true,
             isNegotiating: { $ne: true },

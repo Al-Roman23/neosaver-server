@@ -98,6 +98,22 @@ async function runTest() {
     dSocket.emit("driver_location_update", { lat: 23.8103, lng: 90.4125 }); // Set Location
     console.log("📡 WebSocket: Driver GPS Active.");
 
+    // Test: Background Transition Logic
+    console.log("🔄 Step: Simulating App Background Transition (Grace Period Test)...");
+    dSocket.emit("app_state_change", { state: "background" });
+    await new Promise(r => setTimeout(r, 1000)); // Latency buffer
+
+    // Verify Discovery Pipeline Includes Background Drivers
+    const discPostBg = await axios.get(`${BASE_URL}/orders/nearby?pickupLat=23.8103&pickupLng=90.4125`, { headers: { Authorization: `Bearer ${userToken}` } });
+    if (discPostBg.data.data.drivers.length > 0) {
+      console.log("✅ Background Discovery Verified: Driver Still Visible Via Heartbeat Grace!");
+    } else {
+      throw new Error("Discovery Error: Background Driver Wrongfully Hidden!");
+    }
+    
+    // Resume Normal State For Continuation
+    dSocket.emit("app_state_change", { state: "foreground" });
+
     // Surge Scenario (1 Driver Nearby)
     const discovery = await axios.get(`${BASE_URL}/orders/nearby?pickupLat=23.8103&pickupLng=90.4125`, {
       headers: { Authorization: `Bearer ${userToken}` }

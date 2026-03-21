@@ -219,9 +219,29 @@ class SocketService {
         }
       });
 
-      socket.on("disconnect", () => {
+      // Application State Transition Listener (Foreground / Background Handshake)
+      socket.on("app_state_change", async ({ state }) => {
+        try {
+          const isBackground = state === "background";
+          await PartnerRepository.updateByUserId(userId, {
+            isAppInBackground: isBackground,
+            lastAppHeartbeatAt: new Date()
+          });
+          logger.info({ userId, state }, "User App State Transitioned!");
+        } catch (err) {
+          logger.warn({ err, userId }, "Failed To Persist App State Change!");
+        }
+      });
+
+      socket.on("disconnect", async () => {
         this.users.delete(userId.toString());
         locationRateLimits.delete(userId.toString());
+
+        // Update Heartbeat On Disconnect To Support Background Persistence
+        await PartnerRepository.updateByUserId(userId, {
+          lastAppHeartbeatAt: new Date()
+        }).catch(() => { });
+
         logger.info({ userId, socketId: socket.id }, "User Disconnected (Stateless Pulse Intact).");
       });
     });
