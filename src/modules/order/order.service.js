@@ -52,7 +52,6 @@ class OrderService {
           $match: {
             $or: [
               { isOnline: true },
-              { currentStatus: "online" }, // Fallback For Inconsistent Boolean State
               {
                 isAppInBackground: true,
                 lastAppHeartbeatAt: { $gt: new Date(Date.now() - 5 * 60 * 1000) } // 5 Minute Grace Period
