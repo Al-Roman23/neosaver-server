@@ -327,9 +327,17 @@ async function runTest() {
     // ---------------------------------------------------------
     console.log("\n--- [7] Post-Trip Analytics & Feedback ---");
 
-    // History Retrieval
+    // History Retrieval (User Perspective)
     const history = await axios.get(`${BASE_URL}/orders/history`, { headers: { Authorization: `Bearer ${userToken}` } });
-    if (history.data.data.length > 0) console.log("✅ Order History Persistence Verified!");
+    if (history.data.data.length > 0) console.log("✅ User Order History Persistence Verified!");
+
+    // NEW: History Retrieval (Driver Perspective - Verifying Multi-Document Population)
+    const dHistory = await axios.get(`${BASE_URL}/orders/partner/history`, { headers: { Authorization: `Bearer ${driverToken}` } });
+    if (dHistory.data.data.length > 0 && dHistory.data.data[0].user?.name) {
+      console.log("✅ Driver Order History Verified: Populated Patient Profiles Attached!");
+    } else {
+      throw new Error("FAIL: Driver Order History Missing Populated User Profile Data!");
+    }
 
     // Submit Feedback
     await axios.post(`${BASE_URL}/feedback`, {

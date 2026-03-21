@@ -331,8 +331,19 @@ class OrderService {
     return OrderRepository.findActiveByPartnerId(partnerId);
   }
 
+  // Get Past Trip History For Driver (Includes Populated User/Patient Details)
   async getOrderHistoryByPartner(partnerId, status) {
-    return OrderRepository.findHistoryByPartnerId(partnerId, status);
+    const UserRepository = require("../user/user.repository");
+    const orders = await OrderRepository.findHistoryByPartnerId(partnerId, status);
+
+    // Map Over Orders To Inject Limited User Profile Data For The History View
+    return Promise.all(orders.map(async (order) => {
+      const user = await UserRepository.findById(order.userId.toString());
+      return {
+        ...order,
+        user: user ? { name: user.name, firstName: user.firstName, lastName: user.lastName, phone: user.phone } : null
+      };
+    }));
   }
 }
 
