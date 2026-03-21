@@ -130,8 +130,9 @@ class OrderService {
         if (!order) throw new NotFound("Order Not Found!");
 
         // Security Verification: Can Only Be Status Changed By Participant
-        const isUser = order.userId.toString() === userId;
-        const isDriver = order.partnerId && order.partnerId.toString() === userId;
+        const normalizedUserId = userId.toString();
+        const isUser = order.userId.toString() === normalizedUserId;
+        const isDriver = order.partnerId && order.partnerId.toString() === normalizedUserId;
         if (!isUser && !isDriver) throw new BadRequest("Unauthorized To Cancel This Order!");
 
         // Forbidden If Already Completed
