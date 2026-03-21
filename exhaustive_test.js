@@ -209,6 +209,14 @@ async function runTest() {
       const acceptAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "accept", sequence: 5, ...generateSecurity() }, r));
       if (!acceptAck.success) throw new Error("Agreement Closure Failed!");
       console.log("✅ AGREEMENT REACHED: Order Status -> ACCEPTED (OCC Version Incremented).");
+
+      // Verify Active Order Payload Includes Spliced Driver & User Data
+      const activeRes = await axios.get(`${BASE_URL}/orders/active`, { headers: { Authorization: `Bearer ${userToken}` } });
+      const activeData = activeRes.data.data;
+      if (!activeData.partner || !activeData.partner.name || !activeData.partner.phone) {
+        throw new Error("FAIL: Driver Profile (Name/Phone) Not Fully Populated On Active Order!");
+      }
+      console.log("✅ Active Order Fetch Verified: Driver Profile (Name, Phone, Ambulance) Attached!");
     } else {
       // Round 1
       await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));

@@ -213,7 +213,18 @@ class OrderService {
     // Join Partner Details If Assigned (transparency Post-acceptance)
     let partner = null;
     if (order.partnerId && ["accepted", "arrived", "pickup_started", "to_destination", "completed"].includes(order.status)) {
-      partner = await PartnerRepository.findById(order.partnerId);
+      const partnerData = await PartnerRepository.findByUserId(order.partnerId.toString());
+      const driverUser = await UserRepository.findById(order.partnerId.toString());
+
+      if (partnerData && driverUser) {
+        partner = {
+          ...partnerData,
+          name: driverUser.name,
+          firstName: driverUser.firstName,
+          lastName: driverUser.lastName,
+          phone: driverUser.phone
+        };
+      }
     }
 
     const result = {
