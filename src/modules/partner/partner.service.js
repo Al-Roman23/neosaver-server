@@ -64,12 +64,12 @@ class PartnerService {
     const user = await UserRepository.findById(userId);
     const partner = await PartnerRepository.findByUserId(userId);
 
-    if (!user || !partner) {
-      const { Conflict } = require("../../core/errors/errors");
-      throw new Conflict("Incomplete Profile: Partner Record Could Not Be Found!");
+    if (!user) {
+      const { NotFound } = require("../../core/errors/errors");
+      throw new NotFound("User Record Could Not Be Found!");
     }
 
-    // Assemble The Required Output Structure
+    // Assemble The Required Output Structure With Null-Safety For Un-Onboarded Partners
     return {
       personalInfo: {
         _id: user._id,
@@ -80,7 +80,7 @@ class PartnerService {
         role: user.role,
         createdAt: user.createdAt,
       },
-      partnerInfo: {
+      partnerInfo: partner ? {
         ambulanceType: partner.ambulanceType,
         vehicleNumber: partner.vehicleNumber,
         driverLicenseNumber: partner.driverLicenseNumber,
@@ -102,7 +102,7 @@ class PartnerService {
         completedOrderCount: await (require("../order/order.repository").countCompletedByPartnerId(userId)),
         createdAt: partner.createdAt,
         updatedAt: partner.updatedAt,
-      },
+      } : null,
     };
   }
 
