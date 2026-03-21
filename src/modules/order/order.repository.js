@@ -27,17 +27,17 @@ class OrderRepository {
   async initiateNegotiation(orderId, negotiationId, version, options = {}) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.findOneAndUpdate(
-      { 
-        _id: new ObjectId(orderId), 
-        status: "pending", 
+      {
+        _id: new ObjectId(orderId),
+        status: "pending",
         negotiationId: null,
         version: version // Safety Check
       },
-      { 
-        $set: { 
-          status: "negotiating", 
+      {
+        $set: {
+          status: "negotiating",
           negotiationId: new ObjectId(negotiationId),
-          updatedAt: new Date() 
+          updatedAt: new Date()
         },
         $push: { negotiationHistory: new ObjectId(negotiationId) },
         $inc: { version: 1 }
@@ -46,30 +46,55 @@ class OrderRepository {
     );
   }
 
-  // Record A Failed Negotiation Attempt To Prevent Instant Spam
+  // Record A Failed Negotiation Attempt To Prevent Instant Spam (refined For Retry Cooldown)
   async recordNegotiationAttempt(orderId, partnerId, options = {}) {
     const ordersCollection = await getCollection("orders");
-    return ordersCollection.updateOne(
-      { _id: new ObjectId(orderId) },
-      { 
-        $push: { 
-          attemptedDrivers: { 
-            driverId: new ObjectId(partnerId), 
-            lastTriedAt: new Date() 
-          } 
-        },
-        $set: { 
-          negotiationId: null, 
+    const driverObjectId = new ObjectId(partnerId);
+
+    // 1. First Attempt: Update Existing Entry If It Exists
+    const updateResult = await ordersCollection.updateOne(
+      {
+        _id: new ObjectId(orderId),
+        "attemptedDrivers.driverId": driverObjectId
+      },
+      {
+        $set: {
+          "attemptedDrivers.$.lastTriedAt": new Date(),
+          negotiationId: null,
           status: "pending",
-          updatedAt: new Date() 
+          updatedAt: new Date()
         },
         $inc: { version: 1 }
       },
       options
     );
+
+    // 2. Second Attempt: If Not Existing, Push New Entry With Slice Limit
+    if (updateResult.matchedCount === 0) {
+      return ordersCollection.updateOne(
+        { _id: new ObjectId(orderId) },
+        {
+          $push: {
+            attemptedDrivers: {
+              $each: [{ driverId: driverObjectId, lastTriedAt: new Date() }],
+              $slice: -20 // Keep Last 20 Only For Performance
+            }
+          },
+          $set: {
+            negotiationId: null,
+            status: "pending",
+            updatedAt: new Date()
+          },
+          $inc: { version: 1 }
+        },
+        options
+      );
+    }
+
+    return updateResult;
   }
 
-  // Update Driver Location (Live Re-sync Safety)
+  // Update Driver Location (live Re-sync Safety)
   async updateDriverLocation(orderId, lng, lat) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
@@ -85,20 +110,20 @@ class OrderRepository {
       }
     );
   }
-  
-  // Update Status With Full Guard Stack (Role, Status, Version)
+
+  // Update Status With Full Guard Stack (role, Status, Version)
   async updateStatusWithGuard(orderId, partnerId, expectedStatus, newStatus, extraFields = {}, options = {}) {
     const ordersCollection = await getCollection("orders");
-    
+
     // Construct Atomic Filter
-    const filter = { 
-      _id: new ObjectId(orderId), 
-      status: Array.isArray(expectedStatus) ? { $in: expectedStatus } : expectedStatus 
+    const filter = {
+      _id: new ObjectId(orderId),
+      status: Array.isArray(expectedStatus) ? { $in: expectedStatus } : expectedStatus
     };
 
-    // Only Enforce PartnerId If Already Assigned (States Post-negotiation)
+    // Only Enforce Partnerid If Already Assigned (states Post-negotiation)
     const assignedStates = ["accepted", "arrived", "pickup_started", "to_destination"];
-    const isAssigned = Array.isArray(expectedStatus) 
+    const isAssigned = Array.isArray(expectedStatus)
       ? expectedStatus.some(s => assignedStates.includes(s))
       : assignedStates.includes(expectedStatus);
 
@@ -108,11 +133,11 @@ class OrderRepository {
 
     return ordersCollection.findOneAndUpdate(
       filter,
-      { 
-        $set: { 
-          status: newStatus, 
-          ...extraFields, 
-          updatedAt: new Date() 
+      {
+        $set: {
+          status: newStatus,
+          ...extraFields,
+          updatedAt: new Date()
         },
         $inc: { version: 1 }
       },
@@ -125,7 +150,7 @@ class OrderRepository {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
       { _id: new ObjectId(orderId) },
-      { 
+      {
         $set: { status, ...extraFields, updatedAt: new Date() },
         $inc: { version: 1 }
       },
@@ -133,7 +158,7 @@ class OrderRepository {
     );
   }
 
-  // Get User's Active Order (Supports Negotiating State)
+  // Get User's Active Order (supports Negotiating State)
   async findActiveByUserId(userId) {
     const ordersCollection = await getCollection("orders");
     const activeStatuses = ["pending", "negotiating", "accepted", "arrived", "pickup_started", "to_destination"];
@@ -143,7 +168,7 @@ class OrderRepository {
     });
   }
 
-  // History And History By Driver Remain Same (Standard Sort, Optional Filtering)
+  // History And History By Driver Remain Same (standard Sort, Optional Filtering)
   async findHistoryByUserId(userId, statusFilter = null) {
     const ordersCollection = await getCollection("orders");
     const query = { userId: new ObjectId(userId) };
@@ -172,6 +197,15 @@ class OrderRepository {
     return ordersCollection.findOne({
       partnerId: new ObjectId(partnerId),
       status: { $in: activeStatuses },
+    });
+  }
+
+  // Count Total Completed Trips For A Specific Driver
+  async countCompletedByPartnerId(partnerId) {
+    const ordersCollection = await getCollection("orders");
+    return ordersCollection.countDocuments({
+      partnerId: new ObjectId(partnerId),
+      status: "completed",
     });
   }
 }

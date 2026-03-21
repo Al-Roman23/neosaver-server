@@ -6,7 +6,7 @@ class AboutController {
   async getAboutUs(req, res, next) {
     try {
       const data = await AboutService.getAboutUs();
-      
+
       res.json({
         success: true,
         data,

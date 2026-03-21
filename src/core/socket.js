@@ -43,7 +43,7 @@ class SocketService {
 
     const locationRateLimits = new Map();
 
-    // Security Guard: Distributed Replay Attack Defense (Timestamp + Nonce)
+    // Security Guard: Distributed Replay Attack Defense (timestamp + Nonce)
     const validateReplay = async (timestamp, nonce) => {
       try {
         const skew = Math.abs(Date.now() - timestamp);
@@ -51,29 +51,29 @@ class SocketService {
 
         const { getCollection } = require("../config/db");
         const collection = await getCollection("nonces");
-        
-        // Atomic Insert-If-Not-Exists (Unique Constraint Handle)
+
+        // Atomic Insert-if-not-exists (unique Constraint Handle)
         await collection.insertOne({ nonce, createdAt: new Date() });
         return true;
       } catch (err) {
-        // Duplicate Nonce Error (Code 11000) Means Replay Detected
+        // Duplicate Nonce Error (code 11000) Means Replay Detected
         return false;
       }
     };
 
     this.io.on("connection", (socket) => {
       const userId = socket.userId;
-      
+
       // Map User Id To Socket Id
       this.users.set(userId.toString(), socket.id);
-      
+
       // Force Drivers To Join A Dedicated Room For Dispatch Targeting
       socket.join("driver_" + userId);
 
       logger.info({ userId, socketId: socket.id }, "User Online — Listening For Core Engine Events.");
 
-      // Update Last Socket Connection For Partners Natively (Silently Drops For Non-partners)
-      PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => {});
+      // Update Last Socket Connection For Partners Natively (silently Drops For Non-partners)
+      PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => { });
 
       // Attempt To Deliver Any Pending Offline Notifications Asynchronously
       OfflineNotificationService.deliverPendingNotifications(userId, socket);
@@ -84,7 +84,7 @@ class SocketService {
           if (!lat || !lng) return;
           const now = Date.now();
           const lastUpdate = locationRateLimits.get(userId.toString()) || 0;
-          
+
           if (now - lastUpdate < 5000) return; // 5 Seconds Max Refresh Rate
           locationRateLimits.set(userId.toString(), now);
 
@@ -93,26 +93,26 @@ class SocketService {
           if (!partner) return;
 
           await PartnerRepository.updateDriverLocation(userId, lng, lat);
-          
+
           // Live Broadcast To Order Room If Driver Is On A Trip
           if (partner.currentOrderId) {
             const orderId = partner.currentOrderId.toString();
-            
-            // Sync Location To Order Document (Reopen-App Safety)
+
+            // Sync Location To Order Document (reopen-app Safety)
             await OrderRepository.updateDriverLocation(orderId, lng, lat);
-            
-            // Broadcast Live Push To The Dedicated Order Room (With Distance Proximity Metadata)
+
+            // Broadcast Live Push To The Dedicated Order Room (with Distance Proximity Metadata)
             const order = await OrderRepository.findById(orderId);
             const pickup = order.pickupLocation.coordinates;
-            
-            // Simple Spherical Earth Distance (Approximate meters)
+
+            // Simple Spherical Earth Distance (approximate Meters)
             const R = 6371e3;
-            const φ1 = lat * Math.PI/180;
-            const φ2 = pickup[1] * Math.PI/180;
-            const Δφ = (pickup[1]-lat) * Math.PI/180;
-            const Δλ = (pickup[0]-lng) * Math.PI/180;
-            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const φ1 = lat * Math.PI / 180;
+            const φ2 = pickup[1] * Math.PI / 180;
+            const Δφ = (pickup[1] - lat) * Math.PI / 180;
+            const Δλ = (pickup[0] - lng) * Math.PI / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             const distanceMeters = Math.round(R * c);
 
             this.io.to("order_" + orderId).emit("trip_location_update", {
@@ -133,12 +133,12 @@ class SocketService {
         try {
           if (!(await validateReplay(timestamp, nonce))) return ack({ success: false, message: "Security Violation: Replay Detected!" });
           const NegotiationService = require("../modules/negotiation/negotiation.service");
-          
-          const session = await NegotiationService.initiate(userId.toString(), { 
-            orderId, driverId, version 
+
+          const session = await NegotiationService.initiate(userId.toString(), {
+            orderId, driverId, version
           });
 
-          // Fetch Combined Order + Limited User Profile For Driver UI
+          // Fetch Combined Order + Limited User Profile For Driver Ui
           const OrderService = require("../modules/order/order.service");
           const combinedOrder = await OrderService.getOrderDetails(orderId, driverId, "driver");
 
@@ -146,14 +146,14 @@ class SocketService {
           socket.join("order_" + orderId);
           const driverSocketId = this.users.get(driverId.toString());
           if (driverSocketId) {
-             const driverSocket = this.io.sockets.sockets.get(driverSocketId);
-             if (driverSocket) driverSocket.join("order_" + orderId);
+            const driverSocket = this.io.sockets.sockets.get(driverSocketId);
+            if (driverSocket) driverSocket.join("order_" + orderId);
           }
 
-          // Emit Negotiation Request To Driver (Include Combined Payload For Latency Reduction)
+          // Emit Negotiation Request To Driver (include Combined Payload For Latency Reduction)
           this.io.to("driver_" + driverId).emit("new_negotiation_request", {
-            orderId, 
-            sessionId: session._id, 
+            orderId,
+            sessionId: session._id,
             userId,
             order: combinedOrder
           });
@@ -166,7 +166,7 @@ class SocketService {
         }
       });
 
-      // Listener: Bidding Interaction (User/Driver Counter-offer Or Respond)
+      // Listener: Bidding Interaction (user/driver Counter-offer Or Respond)
       socket.on("negotiation_respond", async ({ sessionId, orderId, action, amount, sequence, timestamp, nonce }, ack) => {
         try {
           if (!(await validateReplay(timestamp, nonce))) return;
@@ -176,29 +176,29 @@ class SocketService {
           const session = await NegotiationRepository.findById(sessionId);
           if (!session || session.status !== "active") return ack({ success: false, message: "Session Inactive!" });
 
-          // Message Ordering Guarantee (Sequence Check)
+          // Message Ordering Guarantee (sequence Check)
           if (sequence <= (session.lastSequence || 0)) return ack({ success: false, message: "Out-of-Order Packet Trapped!" });
 
           if (action === "accept") {
-             // 1. Service-Layer Atomic Completion (Business Rules + Analytics)
-             await NegotiationService.completeNegotiation(sessionId, orderId);
-             
-             // 2. Synchronize Unified State To Room Participants
-             this.io.to("order_" + orderId).emit("negotiation_finalized", { 
-               status: "accepted", 
-               orderId 
-             });
+            // 1. Service-layer Atomic Completion (business Rules + Analytics)
+            await NegotiationService.completeNegotiation(sessionId, orderId);
 
-             return ack({ success: true });
+            // 2. Synchronize Unified State To Room Participants
+            this.io.to("order_" + orderId).emit("negotiation_finalized", {
+              status: "accepted",
+              orderId
+            });
+
+            return ack({ success: true });
           }
 
           if (action === "reject") {
-             await NegotiationService.failNegotiation(sessionId, "rejected_by_party");
-             this.io.to("order_" + orderId).emit("negotiation_finalized", { status: "rejected", orderId });
-             return ack({ success: true });
+            await NegotiationService.failNegotiation(sessionId, "rejected_by_party");
+            this.io.to("order_" + orderId).emit("negotiation_finalized", { status: "rejected", orderId });
+            return ack({ success: true });
           }
-          
-          // Add Message (Target Document Has Status: 'Active' And 'LastSequence' Guard)
+
+          // Add Message (target Document Has Status: 'active' And 'lastsequence' Guard)
           const updatedSession = await NegotiationRepository.addMessage(sessionId, {
             sender: socket.userId.toString() === session.userId.toString() ? "user" : "driver",
             amount,
@@ -209,9 +209,9 @@ class SocketService {
 
           // Synchronize State To All Parties In The Room
           this.io.to("order_" + orderId).emit("negotiation_update", {
-             sessionId, amount, round: updatedSession.currentRound, sequence
+            sessionId, amount, round: updatedSession.currentRound, sequence
           });
-          
+
           ack({ success: true });
         } catch (error) {
           logger.error({ error, userId }, "Bidding Interaction Cycle Failed!");
@@ -226,10 +226,10 @@ class SocketService {
       });
     });
 
-    // WebSocket Service Initialized Successfully!
+    // Websocket Service Initialized Successfully!
   }
 
-  // Refactored Reliable Delivery With Triple-retry ACK Logic For Mission-Critical Status
+  // Refactored Reliable Delivery With Triple-retry Ack Logic For Mission-critical Status
   sendToUser(userId, event, data, retryCount = 0) {
     const socketId = this.users.get(userId.toString());
     if (socketId && this.io) {
@@ -237,17 +237,17 @@ class SocketService {
       this.io.to(socketId).timeout(5000).emit(event, data, (err, responses) => {
         if (err) {
           if (retryCount < 2) {
-             logger.warn({ userId, event, retryCount }, "Real-time ACK Missing — Retrying...");
-             this.sendToUser(userId, event, data, retryCount + 1);
+            logger.warn({ userId, event, retryCount }, "Real-time ACK Missing — Retrying...");
+            this.sendToUser(userId, event, data, retryCount + 1);
           } else {
-             logger.error({ userId, event }, "TCP/WS Delivery Exhausted — Queueing Persistence.");
-             OfflineNotificationService.queueNotification(userId, event, data);
+            logger.error({ userId, event }, "TCP/WS Delivery Exhausted — Queueing Persistence.");
+            OfflineNotificationService.queueNotification(userId, event, data);
           }
         }
       });
       return true;
     }
-    
+
     OfflineNotificationService.queueNotification(userId, event, data);
     return false;
   }

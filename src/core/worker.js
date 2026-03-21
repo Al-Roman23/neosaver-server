@@ -24,11 +24,11 @@ class BackgroundWorker {
   async runReconciliation() {
     const lockCollection = await getCollection("worker_locks");
     const lockKey = "global_reconciliation_pulse";
-    
+
     try {
-      // 1. Acquire Distributed Lock (Atomic Insert)
+      // 1. Acquire Distributed Lock (atomic Insert)
       await lockCollection.insertOne({ lockKey, createdAt: new Date() });
-      
+
       const now = new Date();
       logger.info("Executing Global Reconciliation Pulse (Distributed Lock Acquired)!");
 
@@ -45,7 +45,7 @@ class BackgroundWorker {
       }
     } finally {
       // Release Lock For The Next Pulse
-      await lockCollection.deleteOne({ lockKey }).catch(() => {});
+      await lockCollection.deleteOne({ lockKey }).catch(() => { });
     }
   }
 
@@ -66,11 +66,11 @@ class BackgroundWorker {
 
     if (expiredSessions.length > 0) {
       logger.info({ count: expiredSessions.length }, "Cleaning Up Expired Negotiation Sessions...");
-      
+
       await Promise.allSettled(expiredSessions.map(async (session) => {
-        // Mark Session As Expired In DB
-        await NegotiationRepository.updateStatus(session._id, "expired_timeout", { 
-          endedReason: "no_response_timeout" 
+        // Mark Session As Expired In Db
+        await NegotiationRepository.updateStatus(session._id, "expired_timeout", {
+          endedReason: "no_response_timeout"
         });
 
         // Unlock Participant Driver
@@ -81,19 +81,19 @@ class BackgroundWorker {
 
         // Notify Participant Sockets
         const socketService = require("./socket");
-        socketService.sendToUser(session.userId.toString(), "negotiation_expired", { 
-          orderId: session.orderId, 
-          message: "No Response From Driver. Negotiation Terminated." 
+        socketService.sendToUser(session.userId.toString(), "negotiation_expired", {
+          orderId: session.orderId,
+          message: "No Response From Driver. Negotiation Terminated."
         });
-        socketService.sendToUser(session.driverId.toString(), "negotiation_expired", { 
-          orderId: session.orderId, 
-          message: "Negotiation Timed Out Due To Inactivity." 
+        socketService.sendToUser(session.driverId.toString(), "negotiation_expired", {
+          orderId: session.orderId,
+          message: "Negotiation Timed Out Due To Inactivity."
         });
       }));
     }
   }
 
-  // Task: Auto-Cancel "Ghost" Trips (Arrived But No Movement For 15m)
+  // Task: Auto-cancel "ghost" Trips (arrived But No Movement For 15m)
   async reconcileGhostTrips() {
     const ghostTimeLimit = new Date(Date.now() - 15 * 60 * 1000);
     const ordersCollection = await getCollection("orders");
@@ -104,9 +104,9 @@ class BackgroundWorker {
     if (ghostOrders.length > 0) {
       logger.warn({ count: ghostOrders.length }, "System Cancelling Inactive 'Arrived' Orders (Ghost Trips)...");
       await Promise.allSettled(ghostOrders.map(async (order) => {
-        await OrderRepository.updateStatus(order._id, "cancelled_system", { 
-          cancelledAt: new Date(), 
-          penaltyFlag: true 
+        await OrderRepository.updateStatus(order._id, "cancelled_system", {
+          cancelledAt: new Date(),
+          penaltyFlag: true
         });
         await PartnerRepository.unlockDriver(order.partnerId.toString());
       }));

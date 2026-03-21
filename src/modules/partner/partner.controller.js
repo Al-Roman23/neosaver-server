@@ -7,7 +7,7 @@ class PartnerController {
     try {
       const userId = req.user.id;
       await PartnerService.registerPartner(userId, req.body);
-      
+
       res.status(201).json({
         success: true,
         message: "Partner Details Submitted Successfully!",
@@ -17,12 +17,12 @@ class PartnerController {
     }
   }
 
-  // Get Unified Partner Profile (Users + Partners Data)
+  // Get Unified Partner Profile (users + Partners Data)
   async getProfile(req, res, next) {
     try {
       const userId = req.user.id;
       const result = await PartnerService.getPartnerProfile(userId);
-      
+
       res.status(200).json({
         success: true,
         data: result,
@@ -37,10 +37,10 @@ class PartnerController {
     try {
       const userId = req.user.id;
       const { validatePartnerProfileUpdate } = require("./partner.validator");
-      
+
       validatePartnerProfileUpdate(req.body);
       const updatedProfile = await PartnerService.updatePartnerProfile(userId, req.body);
-      
+
       res.status(200).json({
         success: true,
         message: "Partner Profile Updated Successfully!",
@@ -56,10 +56,10 @@ class PartnerController {
     try {
       const userId = req.user.id;
       const { validateStatusUpdate } = require("./partner.validator");
-      
+
       validateStatusUpdate(req.body);
       const updatedProfile = await PartnerService.updateStatus(userId, req.body.currentStatus);
-      
+
       res.status(200).json({
         success: true,
         message: "Status Updated Successfully!",
@@ -96,7 +96,7 @@ class PartnerController {
   async getAvailablePartners(req, res, next) {
     try {
       const partners = await PartnerService.getAllAvailablePartners();
-      
+
       res.status(200).json({
         success: true,
         data: partners,
@@ -106,7 +106,7 @@ class PartnerController {
     }
   }
 
-  // Verify Partner Identity (Admin Action)
+  // Verify Partner Identity (admin Action)
   async verifyPartner(req, res, next) {
     try {
       const { id: partnerId } = req.params;

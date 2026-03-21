@@ -6,7 +6,7 @@ class TermsController {
   async getTerms(req, res, next) {
     try {
       const data = await TermsService.getTermsAndConditions();
-      
+
       res.json({
         success: true,
         data,

@@ -27,9 +27,9 @@ class NegotiationRepository {
   // Find Active Session For An Order
   async findActiveByOrderId(orderId) {
     const collection = await getCollection("negotiation_sessions");
-    return collection.findOne({ 
-      orderId: new ObjectId(orderId), 
-      status: "active" 
+    return collection.findOne({
+      orderId: new ObjectId(orderId),
+      status: "active"
     });
   }
 
@@ -37,45 +37,45 @@ class NegotiationRepository {
   async addMessage(sessionId, message, options = {}) {
     const collection = await getCollection("negotiation_sessions");
     return collection.findOneAndUpdate(
-      { 
-        _id: new ObjectId(sessionId), 
-        status: "active", 
+      {
+        _id: new ObjectId(sessionId),
+        status: "active",
         currentRound: { $lt: 6 }, // 6 messages = EXACTLY 3 full rounds (Driver x3 + User x3)
-        // Enforce Sequence Integrity At DB Level
-        lastSequence: { $lt: message.sequence } 
+        // Enforce Sequence Integrity At Db Level
+        lastSequence: { $lt: message.sequence }
       },
-      { 
+      {
         $push: { messages: { ...message, timestamp: new Date() } },
         $inc: { currentRound: 1 },
-        $set: { 
+        $set: {
           updatedAt: new Date(),
-          lastSequence: message.sequence 
+          lastSequence: message.sequence
         }
       },
       { returnDocument: "after", ...options }
     );
   }
 
-  // Update Final Status And Close Session (With Re-entrancy Guard)
+  // Update Final Status And Close Session (with Re-entrancy Guard)
   async updateStatus(sessionId, status, extraFields = {}, options = {}) {
     const collection = await getCollection("negotiation_sessions");
     return collection.updateOne(
-      { 
-        _id: new ObjectId(sessionId), 
+      {
+        _id: new ObjectId(sessionId),
         status: { $ne: "accepted" } // Guard: Prevent Multi-Accept Pulses
       },
-      { 
-        $set: { 
-          status, 
-          ...extraFields, 
-          updatedAt: new Date() 
-        } 
+      {
+        $set: {
+          status,
+          ...extraFields,
+          updatedAt: new Date()
+        }
       },
       options
     );
   }
 
-  // Find Any Negotiation Session By Order Id (For History/Analytics)
+  // Find Any Negotiation Session By Order Id (for History/analytics)
   async findByOrderId(orderId) {
     const collection = await getCollection("negotiation_sessions");
     return collection.findOne({ orderId: new ObjectId(orderId) });

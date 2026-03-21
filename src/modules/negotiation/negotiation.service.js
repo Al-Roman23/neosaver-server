@@ -12,7 +12,7 @@ class NegotiationService {
   async calculateSuggestedFare(pickupLng, pickupLat, distanceKm) {
     const baseRate = 120; // Example Base Fare In BDT
     const perKmRate = 45;
-    
+
     // Find Drivers In 25km Radius To Determine Surge
     const collection = await getCollection("partners");
     const driverCount = await collection.countDocuments({
@@ -35,7 +35,7 @@ class NegotiationService {
     }
 
     const estimatedFare = Math.round((baseRate + (distanceKm * perKmRate)) * surgeMultiplier);
-    
+
     return {
       estimatedFare,
       surgeApplied: surgeMultiplier > 1.0,
@@ -50,7 +50,7 @@ class NegotiationService {
     const session = client.startSession();
     try {
       let negotiationSession = null;
-      
+
       await session.withTransaction(async () => {
         // 1. Lock Driver Atomically
         const driverLock = await PartnerRepository.lockForNegotiation(driverId, 60000, { session });
@@ -85,18 +85,18 @@ class NegotiationService {
     const dbSession = client.startSession();
     try {
       let result = null;
-      
+
       await dbSession.withTransaction(async () => {
         const negotiation = await NegotiationRepository.findById(sessionId);
         if (!negotiation || negotiation.status !== "active") {
           throw new Conflict("Negotiation Session Inactive Or Already Closed!");
         }
 
-        // 1. Derive Critical Values (Truth From Message History)
+        // 1. Derive Critical Values (truth From Message History)
         const roundCount = negotiation.messages.length;
         const finalPrice = negotiation.messages[roundCount - 1].amount;
 
-        // 2. Transactional Order Status Update (Guarded By OCC)
+        // 2. Transactional Order Status Update (guarded By Occ)
         const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, negotiation.driverId, "negotiating", "accepted", {
           partnerId: new (require("mongodb")).ObjectId(negotiation.driverId),
           acceptedAt: new Date(),
@@ -113,7 +113,7 @@ class NegotiationService {
         // 4. Close Session Documentation
         await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" }, { session: dbSession });
 
-        // 5. Terminal Analytics Log (Single Source Of Truth)
+        // 5. Terminal Analytics Log (single Source Of Truth)
         const order = await OrderRepository.findById(orderId);
         await AnalyticsService.logNegotiationEvent(
           orderId,
@@ -134,7 +134,7 @@ class NegotiationService {
     }
   }
 
-  // Handle Negotiation Termination (Failure/Reject/Expire) With Analytics
+  // Handle Negotiation Termination (failure/reject/expire) With Analytics
   async failNegotiation(sessionId, reason) {
     const dbSession = client.startSession();
     try {
@@ -144,7 +144,7 @@ class NegotiationService {
         const negotiation = await NegotiationRepository.findById(sessionId);
         if (!negotiation || negotiation.status !== "active") return;
 
-        // 1. Mark Session As Ended (Rejected/Expired)
+        // 1. Mark Session As Ended (rejected/expired)
         const outcome = reason === "no_response_timeout" ? "expired_timeout" : "rejected";
         await NegotiationRepository.updateStatus(sessionId, outcome, { endedReason: reason }, { session: dbSession });
 
@@ -154,15 +154,15 @@ class NegotiationService {
         // 3. Reset Order State & Record Attempt To Cooldown
         await OrderRepository.recordNegotiationAttempt(negotiation.orderId, negotiation.driverId, { session: dbSession });
 
-        // Terminal Analytics Log (Single Source Of Truth)
+        // Terminal Analytics Log (single Source Of Truth)
         await AnalyticsService.logNegotiationEvent(
-          negotiation.orderId, 
-          sessionId, 
-          negotiation.driverId, 
+          negotiation.orderId,
+          sessionId,
+          negotiation.driverId,
           negotiation.messages.length, // Derived Round Count
           outcome
         );
-        
+
         result = { orderId: negotiation.orderId, userId: negotiation.userId, driverId: negotiation.driverId };
       });
 
@@ -172,11 +172,11 @@ class NegotiationService {
     }
   }
 
-  // Retrieve Full Bidding Transcript For Auditing (Admins)
+  // Retrieve Full Bidding Transcript For Auditing (admins)
   async getHistory(orderId) {
     // 1. Try Finding Active Session First
     let session = await NegotiationRepository.findActiveByOrderId(orderId);
-    
+
     // 2. If Not Active, Look Up The Order's Historical Archive
     if (!session) {
       const order = await OrderRepository.findById(orderId);

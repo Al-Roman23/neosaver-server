@@ -20,7 +20,7 @@ const PROTECTED_FIELDS = ["role", "_id", "userId", "createdAt", "updatedAt"];
 
 function validatePartnerProfileUpdate(data) {
   const updateKeys = Object.keys(data);
-  
+
   if (updateKeys.length === 0) {
     throw new BadRequest("At Least One Field Must Be Provided To Update!");
   }
@@ -43,7 +43,7 @@ function validatePartnerProfileUpdate(data) {
   if (data.email && !EMAIL_REGEX.test(data.email)) {
     throw new BadRequest("Invalid Email Format!");
   }
-  
+
   if (data.phone && !BD_PHONE_REGEX.test(data.phone)) {
     throw new BadRequest("Phone Must Be A Valid Bangladeshi Number (+8801XXXXXXXXX)!");
   }
@@ -54,7 +54,7 @@ function validateStatusUpdate(data) {
   if (!currentStatus) {
     throw new BadRequest("Current Status Is Required!");
   }
-  
+
   if (currentStatus !== "online" && currentStatus !== "offline") {
     throw new BadRequest("Status Must Be 'online' Or 'offline'!");
   }

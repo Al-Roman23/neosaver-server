@@ -18,10 +18,10 @@ app.use(helmet()); // 11 Military-Grade Security Headers
 app.use(cors());
 app.use(express.json());
 
-// Global API Rate Limiter: Max 100 Requests Per 5 Minutes Per IP
+// Global Api Rate Limiter: Max 100 Requests Per 5 Minutes Per Ip
 const apiLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 100, 
+  max: 100,
   message: { success: false, error: "Too Many Requests! Please Try Again Later!" },
   standardHeaders: true,
   legacyHeaders: false,

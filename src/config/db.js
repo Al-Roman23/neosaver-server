@@ -61,15 +61,15 @@ async function ensureIndexes() {
     await safeIndex("refresh_tokens", { token: 1 });
     await safeIndex("refresh_tokens", { createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
-    // 3. Security (Nonces)
+    // 3. Security (nonces)
     await safeIndex("nonces", { nonce: 1 }, { unique: true });
     await safeIndex("nonces", { createdAt: 1 }, { expireAfterSeconds: 600 });
 
-    // 4. Concurrency (Worker Locks)
+    // 4. Concurrency (worker Locks)
     await safeIndex("worker_locks", { lockKey: 1 }, { unique: true });
     await safeIndex("worker_locks", { createdAt: 1 }, { expireAfterSeconds: 60 });
 
-    // 5. MISSION CRITICAL: Partners (Geo + Locking)
+    // 5. Mission Critical: Partners (geo + Locking)
     await safeIndex("partners", { email: 1 }, { unique: true });
     await safeIndex("partners", { userId: 1 }, { unique: true });
     await safeIndex("partners", { nationalId: 1 }, { unique: true });
@@ -84,7 +84,7 @@ async function ensureIndexes() {
     await safeIndex("negotiation_sessions", { status: 1, expiresAt: 1 });
     await safeIndex("negotiation_sessions", { userId: 1, status: 1 });
 
-    // 7. Orders (Geo + Performance)
+    // 7. Orders (geo + Performance)
     await safeIndex("orders", { userId: 1, status: 1 });
     await safeIndex("orders", { partnerId: 1, status: 1 });
     await safeIndex("orders", { status: 1, createdAt: -1 });
@@ -107,7 +107,7 @@ async function ensureIndexes() {
     logger.info("--- DATABASE INDEX PROVISIONING REPORT ---");
     results.forEach(msg => logger.info(msg));
     logger.info("------------------------------------------");
-    
+
   } catch (err) {
     logger.fatal({ err }, "Fatal Database Initialization Failure!");
     throw err;

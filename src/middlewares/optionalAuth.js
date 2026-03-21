@@ -16,7 +16,7 @@ async function optionalAuth(req, res, next) {
     }
 
     const token = header.split(" ")[1];
-    
+
     // Verify Token Signature And Expiration
     let decoded;
     try {

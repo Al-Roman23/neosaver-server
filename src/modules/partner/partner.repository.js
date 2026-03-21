@@ -29,7 +29,7 @@ class PartnerRepository {
     );
   }
 
-  // Verify A Partner Manually (Admin Only)
+  // Verify A Partner Manually (admin Only)
   async verifyPartner(partnerId, isVerified = true, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
@@ -68,23 +68,23 @@ class PartnerRepository {
     );
   }
 
-  // Atomically Lock Driver For A Negotiation Session (Prevents Double-negotiation)
+  // Atomically Lock Driver For A Negotiation Session (prevents Double-negotiation)
   async lockForNegotiation(userId, timeoutMs = 60000, options = {}) {
     const partnersCollection = await getCollection("partners");
     const expiresAt = new Date(Date.now() + timeoutMs);
-    
+
     return partnersCollection.findOneAndUpdate(
-      { 
-        userId: new ObjectId(userId), 
+      {
+        userId: new ObjectId(userId),
         currentOrderId: null,      // Must Not Be On A Trip
         isNegotiating: { $ne: true } // Must Not Be Negotiating Already
       },
-      { 
-        $set: { 
-          isNegotiating: true, 
+      {
+        $set: {
+          isNegotiating: true,
           negotiationLockExpiresAt: expiresAt,
-          updatedAt: new Date() 
-        } 
+          updatedAt: new Date()
+        }
       },
       { returnDocument: "after", ...options }
     );
@@ -95,48 +95,49 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
-      { 
-        $set: { 
-          isNegotiating: false, 
-          negotiationLockExpiresAt: null, 
-          updatedAt: new Date() 
-        } 
+      {
+        $set: {
+          isNegotiating: false,
+          isAvailable: true, // Restore Bidding Presence In Discovery Pool
+          negotiationLockExpiresAt: null,
+          updatedAt: new Date()
+        }
       },
       options
     );
   }
 
-  // Clear Stale Negotiation Locks (Called By Background Worker)
+  // Clear Stale Negotiation Locks (called By Background Worker)
   async clearStaleLocks(options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateMany(
-      { 
-        isNegotiating: true, 
-        negotiationLockExpiresAt: { $lt: new Date() } 
+      {
+        isNegotiating: true,
+        negotiationLockExpiresAt: { $lt: new Date() }
       },
-      { 
-        $set: { 
-          isNegotiating: false, 
-          negotiationLockExpiresAt: null, 
-          updatedAt: new Date() 
-        } 
+      {
+        $set: {
+          isNegotiating: false,
+          negotiationLockExpiresAt: null,
+          updatedAt: new Date()
+        }
       },
       options
     );
   }
 
-  // Atomically Lock Driver To An Order (Prevents Double-booking)
+  // Atomically Lock Driver To An Order (prevents Double-booking)
   async lockDriver(userId, orderId, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId), currentOrderId: null }, // Guard
-      { 
-        $set: { 
-          currentOrderId: new ObjectId(orderId), 
+      {
+        $set: {
+          currentOrderId: new ObjectId(orderId),
           isNegotiating: false, // Release Negotiation Lock If Finalized
           negotiationLockExpiresAt: null,
-          updatedAt: new Date() 
-        } 
+          updatedAt: new Date()
+        }
       },
       options
     );
@@ -147,12 +148,13 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
-      { 
-        $set: { 
-          currentOrderId: null, 
-          isNegotiating: false, 
-          updatedAt: new Date() 
-        } 
+      {
+        $set: {
+          currentOrderId: null,
+          isNegotiating: false,
+          isAvailable: true, // Restore Experience Point In Search Pool
+          updatedAt: new Date()
+        }
       },
       options
     );

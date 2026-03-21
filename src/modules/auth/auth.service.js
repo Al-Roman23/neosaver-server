@@ -15,16 +15,16 @@ class AuthService {
   async registerUser(data) {
     // Normalize Email To Lowercase Before Any Operation
     const email = data.email.toLowerCase().trim();
-    const { 
-      name, 
-      firstName, 
-      lastName, 
-      phone, 
-      password, 
-      address, 
-      postCode, 
-      role, 
-      acceptedTerms 
+    const {
+      name,
+      firstName,
+      lastName,
+      phone,
+      password,
+      address,
+      postCode,
+      role,
+      acceptedTerms
     } = data;
 
     // Check Email Uniqueness
@@ -72,12 +72,12 @@ class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: { 
-        _id: userId, 
-        name: newUser.name, 
-        email, 
-        phone, 
-        role: newUser.role 
+      user: {
+        _id: userId,
+        name: newUser.name,
+        email,
+        phone,
+        role: newUser.role
       },
     };
   }
@@ -192,7 +192,7 @@ class AuthService {
     // Save Token To Database -> Ttl Index Will Auto-expire After 1 Hour
     await AuthRepository.saveResetToken(normalizedEmail, resetToken);
 
-    // Wrap Email Send In Try/Catch To Preserve Anonymity Guarantee
+    // Wrap Email Send In Try/catch To Preserve Anonymity Guarantee
     try {
       await sendPasswordResetEmail(normalizedEmail, resetToken);
     } catch (err) {

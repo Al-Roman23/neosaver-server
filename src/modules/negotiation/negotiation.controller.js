@@ -2,7 +2,7 @@
 const NegotiationService = require("./negotiation.service");
 
 class NegotiationController {
-  // REST Endpoint To Initiate A Negotiation (Handshake)
+  // Rest Endpoint To Initiate A Negotiation (handshake)
   async initiate(req, res, next) {
     try {
       const userId = req.user.id;
@@ -12,8 +12,8 @@ class NegotiationController {
         throw new (require("../../core/errors/errors")).BadRequest("Missing Required Negotiation Fields!");
       }
 
-      const session = await NegotiationService.initiate(userId, { 
-        orderId, driverId, version 
+      const session = await NegotiationService.initiate(userId, {
+        orderId, driverId, version
       });
 
       res.status(201).json({

@@ -16,7 +16,7 @@ class PartnerService {
       throw new Conflict("You Have Already Submitted Your Partner Details!");
     }
 
-    // Check Uniqueness For Mission-Critical Documents (NID & License)
+    // Check Uniqueness For Mission-critical Documents (nid & License)
     const { getCollection } = require("../../config/db");
     const partnersCollection = await getCollection("partners");
 
@@ -117,7 +117,7 @@ class PartnerService {
       if (ALLOWED_PARTNER_FIELDS.includes(key)) partnerUpdates[key] = value;
     }
 
-    // Process Users Collection Update (Including Unique Email/Phone Check)
+    // Process Users Collection Update (including Unique Email/phone Check)
     if (Object.keys(userUpdates).length > 0) {
       const user = await UserRepository.findById(userId);
 
@@ -157,7 +157,7 @@ class PartnerService {
       throw new Conflict("Partner Record Could Not Be Found!");
     }
 
-    // Status Drives True Online/Offline Maps Logic -> We Link Isavailable Automatically
+    // Status Drives True Online/offline Maps Logic -> We Link Isavailable Automatically
     const isAvailable = currentStatus === "online";
     const isOnline = currentStatus === "online";
     await PartnerRepository.updateByUserId(userId, { currentStatus, isAvailable, isOnline });
@@ -174,7 +174,7 @@ class PartnerService {
     }
 
     const imageUrl = await uploadImageToImgBB(fileBuffer, originalName);
-    
+
     await PartnerRepository.updateByUserId(userId, { ambulanceImageUrl: imageUrl });
 
     return await this.getPartnerProfile(userId);

@@ -6,7 +6,7 @@ class PrivacyController {
   async getPrivacyPolicy(req, res, next) {
     try {
       const data = await PrivacyService.getPrivacyPolicy();
-      
+
       res.json({
         success: true,
         data,

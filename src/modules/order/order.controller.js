@@ -63,7 +63,7 @@ class OrderController {
       const { pickupLng, pickupLat } = req.query;
       if (!pickupLng || !pickupLat) throw new require("../../core/errors/errors").BadRequest("Coordinates Required!");
 
-      const data = await OrderService.fetchNearbyForDiscovery(pickupLng, pickupLat);
+      const data = await OrderService.fetchNearbyForDiscovery(pickupLng, pickupLat, req.user.id);
       res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);

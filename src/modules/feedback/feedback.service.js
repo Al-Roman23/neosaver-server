@@ -14,9 +14,9 @@ class FeedbackService {
     };
 
     const result = await FeedbackRepository.create(feedbackData);
-    
+
     logger.info({ feedbackId: result.insertedId }, "New Feedback Received!");
-    
+
     return result;
   }
 }

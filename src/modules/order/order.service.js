@@ -15,36 +15,81 @@ const acceptanceResolvers = new Map();
 
 class OrderService {
   // Manual Discovery Phase: Find Nearby Drivers & Aggregated Surge Data
-  async fetchNearbyForDiscovery(pickupLng, pickupLat) {
+  async fetchNearbyForDiscovery(pickupLng, pickupLat, userId) {
     const NegotiationService = require("../negotiation/negotiation.service");
-    
-    // 1. Calculate Surge Meta-data (Scarcity-based)
-    const pricingMetadata = await NegotiationService.calculateSuggestedFare(pickupLng, pickupLat, 10); // Approx 10km Trip
 
-    // 2. Aggregation: Find Online & Available Partners (Spherical Geometry)
-    const collection = await getCollection("partners");
-    const drivers = await collection.aggregate([
-      {
-        $geoNear: {
-          near: { type: "Point", coordinates: [parseFloat(pickupLng), parseFloat(pickupLat)] },
-          distanceField: "dist.calculated",
-          query: { isOnline: true, currentOrderId: null, isAvailable: true, isNegotiating: { $ne: true }, isVerified: true },
-          spherical: true,
+    // Ensure Numeric Coordinates For Precision Matching
+    const lng = parseFloat(pickupLng);
+    const lat = parseFloat(pickupLat);
+
+    // 1. Calculate Surge Meta-data (scarcity-based)
+    const pricingMetadata = await NegotiationService.calculateSuggestedFare(lng, lat, 10); // Approx 10km Trip
+
+    // 2. Identify Blocked Drivers (1-minute Cooldown For Re-discovery)
+    const OrderRepository = require("./order.repository");
+    const activeOrder = await OrderRepository.findActiveByUserId(userId);
+    let blockedDriverIds = [];
+
+    if (activeOrder && activeOrder.attemptedDrivers) {
+      const COOLDOWN_MS = 1 * 60 * 1000; // 1 Minute
+      const cutoff = new Date(Date.now() - COOLDOWN_MS);
+      blockedDriverIds = activeOrder.attemptedDrivers
+        .filter(d => new Date(d.lastTriedAt) > cutoff)
+        .map(d => new ObjectId(d.driverId));
+    }
+
+    // 3. Discovery Pipeline Factory (geonear + Match Filters)
+    const buildDiscoveryPipeline = (excludeIds = []) => {
+      const pipeline = [
+        {
+          $geoNear: {
+            near: { type: "Point", coordinates: [lng, lat] },
+            distanceField: "dist.calculated",
+            spherical: true,
+          },
         },
-      },
-      { $limit: 9 }, // Top 9 Closest Drivers (Unlimited Radius)
-      { $project: { _id: 1, name: 1, ambulanceType: 1, vehicleNumber: 1, "dist.calculated": 1 } }
-    ]).toArray();
+        {
+          $match: {
+            isOnline: true,
+            currentOrderId: null,
+            isAvailable: true,
+            isNegotiating: { $ne: true },
+            isVerified: true,
+            ...(excludeIds.length > 0 ? { _id: { $nin: excludeIds } } : {})
+          }
+        },
+        { $limit: 10 },
+        { $project: { _id: 1, name: 1, ambulanceType: 1, vehicleNumber: 1, "dist.calculated": 1 } }
+      ];
+      return pipeline;
+    };
 
-    return { pricingMetadata, drivers };
+    const collection = await getCollection("partners");
+
+    // 4. Step A: Filtered Discovery (respect Cooldown)
+    let drivers = await collection.aggregate(buildDiscoveryPipeline(blockedDriverIds)).toArray();
+
+    // 5. Step B: Fallback Discovery (ignore Cooldown If Empty Results To Maintain Ux)
+    if (drivers.length === 0) {
+      drivers = await collection.aggregate(buildDiscoveryPipeline([])).toArray();
+    }
+
+    // 6. Enrich Candidates With Social Proof (completed Order Counts)
+    const enrichedDrivers = await Promise.all(drivers.map(async (driver) => {
+      const completedCount = await OrderRepository.countCompletedByPartnerId(driver._id.toString());
+      return { ...driver, completedOrderCount: completedCount };
+    }));
+
+    return { pricingMetadata, drivers: enrichedDrivers };
   }
+
   // Create A New Order In Pending State For User Discovery
   async createOrder(userId, { pickupLng, pickupLat, destinationLng, destinationLat, notes }) {
     if (!pickupLng || !pickupLat || !destinationLng || !destinationLat) {
       throw new BadRequest("Pickup And Destination Coordinates Are Required!");
     }
 
-    // Check For Active Order Conflict (Including Negotiating)
+    // Check For Active Order Conflict (including Negotiating)
     const existingOrder = await OrderRepository.findActiveByUserId(userId);
     if (existingOrder) {
       throw new Conflict("You Already Have An Active Order!");
@@ -74,12 +119,12 @@ class OrderService {
     return order;
   }
 
-  // User Or Driver Cancels An Order (Supports Granular Penalty Logic)
+  // User Or Driver Cancels An Order (supports Granular Penalty Logic)
   async cancelOrder(orderId, userId, cancelBy = "user") {
     const dbSession = client.startSession();
     try {
       let result = null;
-      
+
       await dbSession.withTransaction(async () => {
         const order = await OrderRepository.findById(orderId);
         if (!order) throw new NotFound("Order Not Found!");
@@ -94,13 +139,13 @@ class OrderService {
           throw new BadRequest("Order Is Already Finalized!");
         }
 
-        // Penalty Logic: Mid-Trip Cancellations (After Pickup Or In-Transport)
+        // Penalty Logic: Mid-trip Cancellations (after Pickup Or In-transport)
         const isMidTrip = ["to_destination", "pickup_started", "arrived"].includes(order.status);
         const penaltyApplied = isDriver && isMidTrip;
 
         const newStatus = cancelBy === "user" ? "cancelled_by_user" : "cancelled_by_driver";
-        
-        await OrderRepository.updateStatus(orderId, newStatus, { 
+
+        await OrderRepository.updateStatus(orderId, newStatus, {
           cancelledAt: new Date(),
           cancelledBy: cancelBy,
           penaltyFlag: penaltyApplied
@@ -119,9 +164,9 @@ class OrderService {
           socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
         }
 
-        result = { 
-          message: `Order Cancelled By ${cancelBy.toUpperCase()}!`, 
-          penaltyFlag: penaltyApplied 
+        result = {
+          message: `Order Cancelled By ${cancelBy.toUpperCase()}!`,
+          penaltyFlag: penaltyApplied
         };
       });
 
@@ -131,7 +176,7 @@ class OrderService {
     }
   }
 
-  // Get Detailed Information For A Single Order (Includes Non-Sensitive User Profile)
+  // Get Detailed Information For A Single Order (includes Non-sensitive User Profile)
   async getOrderDetails(orderId, requestUserId, requestUserRole) {
     const UserRepository = require("../user/user.repository");
     const NegotiationRepository = require("../negotiation/negotiation.repository");
@@ -141,7 +186,7 @@ class OrderService {
       throw new NotFound("Order Not Found!");
     }
 
-    // Role-based Access Control Registry (Stringify IDs For Strict Comparison)
+    // Role-based Access Control Registry (stringify Ids For Strict Comparison)
     const normalizedReqId = requestUserId.toString();
     const isUser = order.userId.toString() === normalizedReqId;
     const isDriver = order.partnerId && order.partnerId.toString() === normalizedReqId;
@@ -161,29 +206,37 @@ class OrderService {
       throw new BadRequest("Access Denied: You Are Not A Participant Of This Order.");
     }
 
-    // Join Limited User Profile (Safety: Name Only Before Trip Accepted)
+    // Join Limited User Profile (safety: Name Only Before Trip Accepted)
     const user = await UserRepository.findById(order.userId);
+
+    // Join Partner Details If Assigned (transparency Post-acceptance)
+    let partner = null;
+    if (order.partnerId && ["accepted", "arrived", "pickup_started", "to_destination", "completed"].includes(order.status)) {
+      partner = await PartnerRepository.findById(order.partnerId);
+    }
+
     const result = {
       ...order,
-      user: user ? { name: user.name, firstName: user.firstName, lastName: user.lastName } : null
+      user: user ? { name: user.name, firstName: user.firstName, lastName: user.lastName } : null,
+      partner: partner || null
     };
 
     return result;
   }
 
-  // Driver Arrives — Notify User With Secure OTP Proactively
+  // Driver Arrives — Notify User With Secure Otp Proactively
   async markArrived(orderId, partnerId) {
     const updated = await OrderRepository.updateStatusWithGuard(orderId, partnerId, "accepted", "arrived");
     if (!updated) throw new BadRequest("Invalid State Or Access Denied!");
 
-    // Fetch Full Record To Extract User ID And OTP For Notification
+    // Fetch Full Record To Extract User Id And Otp For Notification
     const order = await OrderRepository.findById(orderId);
     const socketService = require("../../core/socket");
-    
+
     // Broadcast Status Update To Trip Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "arrived" });
 
-    // Proactively Push Specific Arrival Notification To User (With OTP)
+    // Proactively Push Specific Arrival Notification To User (with Otp)
     socketService.sendToUser(order.userId.toString(), "driver_arrived", {
       message: "Your Driver Has Arrived! Provide The OTP To Start Trip Safely.",
       otp: order.otp.code,
@@ -193,7 +246,7 @@ class OrderService {
     return updated;
   }
 
-  // Trip Start — Mandatory OTP Verification
+  // Trip Start — Mandatory Otp Verification
   async startTripWithOTP(orderId, partnerId, userEnteredOtp) {
     const order = await OrderRepository.findById(orderId);
 
@@ -201,7 +254,7 @@ class OrderService {
       throw new BadRequest("Only Assigned Driver Can Start Trip Post-Arrival!");
     }
 
-    // Atomic OTP Verification
+    // Atomic Otp Verification
     if (order.otp.code !== userEnteredOtp) {
       throw new BadRequest("Invalid Verification Code! Trip Cannot Start.");
     }
@@ -216,7 +269,7 @@ class OrderService {
     return updated;
   }
 
-  // Transition To En-Route Full Perspective
+  // Transition To En-route Full Perspective
   async beginTransport(orderId, partnerId) {
     return OrderRepository.updateStatusWithGuard(orderId, partnerId, "pickup_started", "to_destination");
   }
@@ -230,7 +283,18 @@ class OrderService {
 
     await PartnerRepository.unlockDriver(partnerId);
     const socketService = require("../../core/socket");
+
+    // Broadcast Status Update To Trip Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "completed" });
+
+    // Trigger Feedback Handshake For User
+    const order = await OrderRepository.findById(orderId);
+    socketService.sendToUser(order.userId.toString(), "ready_for_feedback", {
+      message: "Trip Completed! Please Share Your Feedback To Help Us Improve.",
+      orderId: order._id,
+      partnerId: order.partnerId
+    });
+
     return updated;
   }
 

@@ -3,7 +3,7 @@ const { getCollection } = require("../../config/db");
 const logger = require("../../utils/logger");
 
 class AnalyticsService {
-  // Record A Negotiation Round Completion For KPI Tracking
+  // Record A Negotiation Round Completion For Kpi Tracking
   async logNegotiationEvent(orderId, sessionId, driverId, round, outcome, finalAmount = null, estimatedFare = null) {
     try {
       const { ObjectId } = require("mongodb");
@@ -23,7 +23,7 @@ class AnalyticsService {
     }
   }
 
-  // Record Driver Penalty (Post-OTP Cancellation)
+  // Record Driver Penalty (post-otp Cancellation)
   async logDriverPenalty(driverId, orderId, reason) {
     try {
       const collection = await getCollection("driver_penalties");
@@ -38,7 +38,7 @@ class AnalyticsService {
     }
   }
 
-  // Retrieve Aggregated Conversion Rates (Mock Implementation For Dashboard)
+  // Retrieve Aggregated Conversion Rates (mock Implementation For Dashboard)
   async getCompletionMetrics() {
     const collection = await getCollection("negotiation_analytics");
     return collection.aggregate([

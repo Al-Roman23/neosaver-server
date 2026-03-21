@@ -8,12 +8,12 @@ const logger = pino({
   transport: isProd
     ? undefined
     : {
-        target: "pino-pretty",
-        options: {
-          colorize: true,
-          translateTime: "SYS:standard",
-        },
+      target: "pino-pretty",
+      options: {
+        colorize: true,
+        translateTime: "SYS:standard",
       },
+    },
 });
 
 module.exports = logger;

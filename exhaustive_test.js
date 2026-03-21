@@ -1,4 +1,4 @@
-// This File Handles The Exhaustive End-To-End Testing Of The NeoSaver Core Engine
+// This File Handles The Exhaustive End-to-end Testing Of The Neosaver Core Engine
 const io = require("socket.io-client");
 const axios = require("axios");
 
@@ -19,7 +19,7 @@ async function runTest() {
 
   try {
     // ---------------------------------------------------------
-    // 1. PUBLIC CONTENT DOMAIN
+    // 1. Public Content Domain
     // ---------------------------------------------------------
     console.log("\n--- [1] Public Content Domain ---");
     const [about, terms, privacy] = await Promise.all([
@@ -30,7 +30,7 @@ async function runTest() {
     if (about.status === 200 && terms.status === 200) console.log("✅ Static Content Retrieved Successfully!");
 
     // ---------------------------------------------------------
-    // 2. AUTH & USER PROFILE DOMAIN
+    // 2. Auth & User Profile Domain
     // ---------------------------------------------------------
     console.log("\n--- [2] Auth & User Profile ---");
     // User Registration
@@ -53,13 +53,13 @@ async function runTest() {
     userToken = refresh.data.data.accessToken;
     console.log("✅ JWT Token Rotation Verified!");
 
-    // Profile GET/PUT
+    // Profile Get/put
     await axios.get(`${BASE_URL}/user/profile`, { headers: { Authorization: `Bearer ${userToken}` } });
     await axios.put(`${BASE_URL}/user/profile`, { address: "Elite Residence, Dhaka" }, { headers: { Authorization: `Bearer ${userToken}` } });
     console.log("✅ User Profile Management Verified!");
 
     // ---------------------------------------------------------
-    // 3. PARTNER DOMAIN -> DRIVER ONBOARDING
+    // 3. Partner Domain -> Driver Onboarding
     // ---------------------------------------------------------
     console.log("\n--- [3] Partner Domain (Onboarding) ---");
     const driverReg = await axios.post(`${BASE_URL}/auth/register`, {
@@ -89,7 +89,7 @@ async function runTest() {
     console.log("✅ Driver State: ONLINE!");
 
     // ---------------------------------------------------------
-    // 4. ORDER DISCOVERY & SURGE PRICING
+    // 4. Order Discovery & Surge Pricing
     // ---------------------------------------------------------
     console.log("\n--- [4] Discovery & Surge Pricing ---");
     // Connect Driver Socket To Join Rooms
@@ -104,11 +104,14 @@ async function runTest() {
     });
     const surge = discovery.data.data.pricingMetadata;
     console.log(`✅ Discovery Layer: Found ${discovery.data.data.drivers.length} Driver(s) (Top 9 Proximity-Buffer Active).`);
+    if (discovery.data.data.drivers.length > 0 && discovery.data.data.drivers[0].hasOwnProperty("completedOrderCount")) {
+      console.log(`⭐ Driver Experience: ${discovery.data.data.drivers[0].completedOrderCount} Trips Completed (Verified).`);
+    }
     console.log(`🔥 Surge Pricing: ${surge.surgeApplied ? "⚠️ ACTIVE" : "Standard"}`);
     console.log(`💰 Estimated Fare: ${surge.estimatedFare} BDT`);
 
     // ---------------------------------------------------------
-    // 5. NEGOTIATION ENGINE -> MULTI-ROUND BIDDING
+    // 5. Negotiation Engine -> Multi-round Bidding
     // ---------------------------------------------------------
     console.log("\n--- [5] Core Negotiation Engine (Bidding) ---");
     // Create Pending Order
@@ -120,7 +123,7 @@ async function runTest() {
     otpCode = oRes.data.data.otp.code;
     console.log("✅ Order Document Created (Status: Pending, Version: 1)");
 
-    // Verify Individual Order Fetch (http GET /orders/:id)
+    // Verify Individual Order Fetch (http Get /orders/:id)
     const fetchRes = await axios.get(`${BASE_URL}/orders/${orderId}`, { headers: { Authorization: `Bearer ${userToken}` } });
     if (fetchRes.data.success && fetchRes.data.data._id === orderId) {
       console.log("✅ Order Detail Fetch Verified (GET /orders/:id)!");
@@ -132,19 +135,19 @@ async function runTest() {
     const uSocket = io(SOCKET_URL, { auth: { token: userToken } });
     await new Promise(r => uSocket.on("connect", r));
 
-    // Start Listening For The Request BEFORE Initiating
+    // Start Listening For The Request Before Initiating
     const negotiationRequestReceived = new Promise((resolve) => {
       dSocket.once("new_negotiation_request", async (data) => {
         console.log("✅ Driver Side: Received New Negotiation Request!");
 
-        // Verify Combined Payload (Proactive Data Injection)
+        // Verify Combined Payload (proactive Data Injection)
         if (data.order && data.order.user && data.order.user.name) {
           console.log(`✅ Driver Side: Proactive Data Received (User: ${data.order.user.name})!`);
         } else {
           throw new Error("Proactive Order+User Data Missing From Socket Event!");
         }
 
-        // Verify Access Relaxation: Driver Must Be Able To GET The Order During Negotiation
+        // Verify Access Relaxation: Driver Must Be Able To Get The Order During Negotiation
         try {
           const dFetch = await axios.get(`${BASE_URL}/orders/${orderId}`, { headers: { Authorization: `Bearer ${driverToken}` } });
           if (dFetch.data.success && dFetch.data.data.user.name) {
@@ -158,11 +161,11 @@ async function runTest() {
       });
     });
 
-    // ATOMIC LOCK TEST: User Initiates Negotiation Via Socket
+    // Atomic Lock Test: User Initiates Negotiation Via Socket
     console.log("🔄 Step: Initiating User ↔ Driver Bidding Handshake (Request Only)...");
     const initAck = await new Promise((resolve) => {
-      uSocket.emit("initiate_negotiation", { 
-        orderId, driverId, version: initialVersion, ...generateSecurity() 
+      uSocket.emit("initiate_negotiation", {
+        orderId, driverId, version: initialVersion, ...generateSecurity()
       }, resolve);
     });
     if (!initAck.success) throw new Error("Negotiation Initiation Failed: " + initAck.message);
@@ -172,75 +175,97 @@ async function runTest() {
     // Wait For The Driver To Actually Get The Event
     await negotiationRequestReceived;
 
-    // DOUBLE-NEGOTIATION CONCURRENCY TEST
+    // Double-negotiation Concurrency Test
     console.log("🔄 Step: Verifying Concurrent Negotiation Lock Idempotency...");
     const failAck = await new Promise((resolve) => {
-      uSocket.emit("initiate_negotiation", { 
-        orderId, driverId, version: initialVersion, ...generateSecurity() 
+      uSocket.emit("initiate_negotiation", {
+        orderId, driverId, version: initialVersion, ...generateSecurity()
       }, resolve);
     });
     if (failAck.success) throw new Error("FAIL: System Allowed Double-Negotiation On Busy Driver!");
     console.log("✅ Locking Verified: System Blocked Concurrent Bidding.");
 
     // ==========================================
-    // MULTI-ROUND BIDDING OPTIONS
-    // Change TEST_OPTION To "B" To Test Max Rounds Failure
+    // Multi-round Bidding Options
+    // Change Test_option To "b" To Test Max Rounds Failure
     // ==========================================
-    const TEST_OPTION = "A"; // "A" For Agreement, "B" For Max Rounds Failure
+    const TEST_OPTION = "B"; // "A" For Agreement, "B" For Max Rounds Failure
 
     console.log(`🔄 Step: Simulating Multi-Round Bidding Interplay (Running Option ${TEST_OPTION})...`);
-    
+
     if (TEST_OPTION === "A") {
-      // ROUND 1
+      // Round 1
       await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
       await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
       console.log("✅ Round 1 (Driver 1500 -> User 1200) Emitted.");
 
-      // ROUND 2
+      // Round 2
       await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1400, sequence: 3, ...generateSecurity() }, r));
       await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1300, sequence: 4, ...generateSecurity() }, r));
       console.log("✅ Round 2 (Driver 1400 -> User 1300) Emitted.");
 
-      // FINAL ACCEPTANCE (Driver Accepts User's 1300)
+      // Final Acceptance (driver Accepts User's 1300)
       console.log("🔄 Step: Closing Negotiation AGREEMENT...");
       const acceptAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "accept", sequence: 5, ...generateSecurity() }, r));
       if (!acceptAck.success) throw new Error("Agreement Closure Failed!");
       console.log("✅ AGREEMENT REACHED: Order Status -> ACCEPTED (OCC Version Incremented).");
     } else {
-      // ROUND 1
+      // Round 1
       await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
       await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
       console.log("✅ Round 1 Completed.");
 
-      // ROUND 2
+      // Round 2
       await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1400, sequence: 3, ...generateSecurity() }, r));
       await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1250, sequence: 4, ...generateSecurity() }, r));
       console.log("✅ Round 2 Completed.");
 
-      // ROUND 3 (Final Allowed)
+      // Round 3 (final Allowed)
       await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1350, sequence: 5, ...generateSecurity() }, r));
       await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1300, sequence: 6, ...generateSecurity() }, r));
       console.log("✅ Round 3 Completed (Max Limit Reached).");
 
-      // ATTEMPT 4TH ROUND (Should Fail)
+      // Attempt 4th Round (should Fail)
       const failAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1320, sequence: 7, ...generateSecurity() }, r));
       if (failAck.success) throw new Error("Security Flaw: Allowed 4th Round!");
       console.log("✅ System Correctly Blocked 4th Round.");
 
-      // DRIVER REJECTS
+      // Driver Rejects
       console.log("🔄 Step: Failing Negotiation...");
       const rejectAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "reject", sequence: 8, ...generateSecurity() }, r));
       if (!rejectAck.success) throw new Error("Rejection Closure Failed!");
-      console.log("✅ NEGOTIATION REJECTED & TRACKED. Ending Test Gracefully For Option B.");
+      console.log("✅ NEGOTIATION REJECTED & TRACKED.");
+
+      // Verify Refined Re-discovery Logic After Rejection
+      console.log("🔄 Step: Verifying Refined Re-Discovery Logic...");
+
+      // 1. Confirm Driver Is Tracked In The Cooldown List
+      const orderAfterReject = await axios.get(`${BASE_URL}/orders/active`, {
+        headers: { Authorization: `Bearer ${userToken}` }
+      });
+      const tracked = orderAfterReject.data.data.attemptedDrivers.some(d => d.driverId === driverId.toString());
+      if (!tracked) throw new Error("FAIL: Driver Not Tracked In attemptedDrivers After Rejection!");
+      console.log("✅ COOLDOWN TRACKING: Driver Recorded In attemptedDrivers!");
+
+      // 2. Confirm Discovery Pool Is Still Operational (not Empty) After Rejection
+      const poolCheck = await axios.get(`${BASE_URL}/orders/nearby?pickupLat=23.8103&pickupLng=90.4125`, {
+        headers: { Authorization: `Bearer ${userToken}` }
+      });
+      if (!poolCheck.data.data.drivers || poolCheck.data.data.drivers.length === 0) {
+        throw new Error("FAIL: Discovery Pool Is Empty After Rejection! System Cannot Serve User!");
+      }
+      console.log(`✅ POOL INTEGRITY: ${poolCheck.data.data.drivers.length} Driver(s) Still Available After Rejection.`);
+      console.log("✅ RE-DISCOVERY STRATEGY: Verified! No Spam Lock. System Remains Operational.");
+
       process.exit(0); // Exit Here Since We Can't Do The Trip If They Rejected
     }
 
     // ---------------------------------------------------------
-    // 6. OTP & TRIP WORKFLOW DOMAIN
+    // 6. Otp & Trip Workflow Domain
     // ---------------------------------------------------------
     console.log("\n--- [6] OTP & Secure Pickup Workflow ---");
-    
-    // Listen for arrival notification with OTP
+
+    // Listen For Arrival Notification With Otp
     const arrivalNotification = new Promise((resolve) => {
       uSocket.once("driver_arrived", (data) => {
         console.log(`✅ User Side: Arrival Notification Received (OTP: ${data.otp})!`);
@@ -255,7 +280,7 @@ async function runTest() {
     const notificationData = await arrivalNotification;
     if (notificationData.otp !== otpCode) throw new Error("Incorrect OTP Received In Notification!");
 
-    // OTP FAILURE TEST
+    // Otp Failure Test
     console.log("🔄 Step: Verifying OTP Security Guard (Incorrect Code)...");
     try {
       await axios.patch(`${BASE_URL}/orders/${orderId}/start`, { otp: "0000" }, { headers: { Authorization: `Bearer ${driverToken}` } });
@@ -265,7 +290,7 @@ async function runTest() {
       else throw err;
     }
 
-    // OTP SUCCESS START
+    // Otp Success Start
     await axios.patch(`${BASE_URL}/orders/${orderId}/start`, { otp: otpCode }, { headers: { Authorization: `Bearer ${driverToken}` } });
     console.log("✅ OTP VERIFIED: Trip Started Successfully!");
 
@@ -274,28 +299,28 @@ async function runTest() {
     console.log("📍 Final: TRIP COMPLETED & Driver Unlocked.");
 
     // ---------------------------------------------------------
-    // 7. ANALYTICS, HISTORY & FEEDBACK
+    // 7. Analytics, History & Feedback
     // ---------------------------------------------------------
     console.log("\n--- [7] Post-Trip Analytics & Feedback ---");
-    
+
     // History Retrieval
     const history = await axios.get(`${BASE_URL}/orders/history`, { headers: { Authorization: `Bearer ${userToken}` } });
     if (history.data.data.length > 0) console.log("✅ Order History Persistence Verified!");
 
     // Submit Feedback
-    await axios.post(`${BASE_URL}/feedback`, { 
-      name: "Neo User", 
+    await axios.post(`${BASE_URL}/feedback`, {
+      name: "Neo User",
       email: userEmail,
-      rating: 5, 
-      feedback: "Negotiation Engine is flawless!" 
+      rating: 5,
+      feedback: "Negotiation Engine is flawless!"
     }, { headers: { Authorization: `Bearer ${userToken}` } });
     console.log("✅ Feedback Loop Complete!");
 
     // ---------------------------------------------------------
-    // 7. ADMIN AUDIT & ANALYTICS
+    // 7. Admin Audit & Analytics
     // ---------------------------------------------------------
     console.log("\n--- [7] Admin Audit & Analytics ---");
-    
+
     // Register Admin
     const adminEmail = `admin${Math.floor(Math.random() * 10000000000000)}@test.com`;
     const adminReg = await axios.post(`${BASE_URL}/auth/register`, {
@@ -306,7 +331,7 @@ async function runTest() {
     const adminToken = adminReg.data.data.accessToken;
     console.log("✅ Admin Registered For Auditing.");
 
-    // Verify Negotiation History Endpoint (Admin Only)
+    // Verify Negotiation History Endpoint (admin Only)
     const audit = await axios.get(`${BASE_URL}/negotiations/history/${orderId}`, { headers: { Authorization: `Bearer ${adminToken}` } });
     if (audit.data.success && audit.data.data.messages.length > 0) {
       console.log(`✅ Admin Audit Verified: Retrieved Bidding Transcript (${audit.data.data.messages.length} Messages).`);
@@ -315,7 +340,7 @@ async function runTest() {
     }
 
     // ---------------------------------------------------------
-    // SUMMARY & EXIT
+    // Summary & Exit
     // ---------------------------------------------------------
     console.log("\n🚀 FINAL VERDICT: 100% OF PRIMARY CORE ENGINE PATHS VERIFIED!");
     console.log("---------------------------------------------------------");

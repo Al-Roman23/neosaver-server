@@ -24,14 +24,15 @@ The system is built as a **Modular Monolith**, segmented into **Bounded Contexts
 ---
 
 ### 🔥 Mission-Critical Features
-1.  **Manual Selection Discovery**: Users can discover nearby online drivers with real-time distance and **Scarcity-based Surge Pricing metadata**.
+1.  **Manual Selection Discovery**: Users can discover nearby online verified drivers with real-time distance and **Scarcity-based Surge Pricing metadata**. The discovery engine uses a **two-step aggregation pipeline** — first attempting to exclude recently-attempted drivers (cooldown), then falling back to the full pool if no alternatives exist, ensuring the user is never left without options.
 2.  **Privacy-First Handshake**: Before trip acceptance, only the User's **Name** is shared with drivers. Contact details are strictly hidden to ensure safety during the bidding phase.
 3.  **Real-Time Proximity Pulse**: Drivers emit live GPS coordinates every 5s, which are transformed into **`distanceMeters`** and **`estimateArrivalMins`** (ETA) for the User.
 4.  **Proactive OTP Delivery**: The system pushes the secure 4-digit OTP to the User **immediately** when the driver marks their arrival (`driver_arrived` socket event).
 5.  **Admin Bidding Audit**: A dedicated history engine (`GET /negotiations/history/:orderId`) allows administrators to review the full 3-round bidding transcript of any trip.
 6.  **Identity Integrity**: Strict uniqueness enforcement on **National ID (NID)** and **Driver License** numbers at the database level to prevent fraudulent accounts.
 7.  **Atomic Driver Locking**: Drivers are atomically locked during a negotiation (`isNegotiating: true`) to prevent "Phantom Bids" and ensure dedicated attention.
-8.  **Zero-Trust OTP Verification**: Trips cannot begin until the Driver verifies a 4-digit OTP provided by the User, ensuring a secure "Patient-in-Ambulance" confirmation.
+8.  **Driver Retry Cooldown Strategy**: After a failed or rejected negotiation, the driver's ID and timestamp are recorded in `attemptedDrivers` (capped at last 20 entries). A **2-minute cooldown** prevents spam re-negotiation, while a **fallback mechanism** ensures the driver reappears in discovery if no other drivers are nearby — preventing false "no drivers available" scenarios.
+9.  **Zero-Trust OTP Verification**: Trips cannot begin until the Driver verifies a 4-digit OTP provided by the User, ensuring a secure "Patient-in-Ambulance" confirmation.
 
 ---
 
@@ -71,7 +72,7 @@ src/
     ```bash
     node exhaustive_test.js
     ```
-    *This script verifies 100% of the system paths (Discovery -> Negotiation -> Bidding -> OTP -> Completion).*
+    *This script verifies 100% of the system paths (Discovery → Negotiation → Bidding → Rejection → Cooldown Tracking → Re-discovery → OTP → Completion).*
 
 ---
 
@@ -84,7 +85,5 @@ Email: [alromanmolla@gmail.com](mailto:alromanmolla@gmail.com)
 LinkedIn: [al-roman](https://www.linkedin.com/in/al-roman)  
 Phone: 01319694957
 
-*"Architecting secure bridges between life-saving data and those who need it most."* — Made with ❤️ by Muhammad Al-Roman Molla
-
 ---
-**NeoSaver Project** | *Empowering Emergency Services through Intelligent Negotiation.*
+*"Architecting secure bridges between life-saving data and those who need it most."* — Made with ❤️ by Muhammad Al-Roman Molla
