@@ -11,10 +11,12 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify Transporter Connection On Startup
+// Verify Transporter Connection Silently On Startup (Preventing App Crash)
 transporter.verify((error) => {
   if (error) {
-    logger.error({ error }, "Email Transporter Connection Failed!");
+    logger.warn("Email Transporter Is Offline. Forgot To Set App Password? Registration/Reset Emails Will Fail.");
+  } else {
+    logger.info("Email Transporter Ready.");
   }
 });
 
