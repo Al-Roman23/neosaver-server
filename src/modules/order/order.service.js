@@ -66,6 +66,12 @@ class OrderService {
           }
         },
         { $limit: 10 },
+        {
+          $addFields: {
+            completedOrderCount: { $ifNull: ["$completedOrderCount", 0] },
+            rating: { $ifNull: ["$rating", 0] }
+          }
+        },
         { $project: { _id: 1, name: 1, ambulanceType: 1, vehicleNumber: 1, completedOrderCount: 1, rating: 1, "dist.calculated": 1 } }
       ];
       return pipeline;
