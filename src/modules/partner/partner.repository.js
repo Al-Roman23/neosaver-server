@@ -21,6 +21,15 @@ class PartnerRepository {
     return partnersCollection.findOne({ userId: new ObjectId(userId) });
   }
 
+  // Update App Heartbeat To Support Graceful Persistence
+  async updateHeartbeat(userId) {
+    const partnersCollection = await getCollection("partners");
+    return partnersCollection.updateOne(
+      { userId: new ObjectId(userId) },
+      { $set: { lastAppHeartbeatAt: new Date(), updatedAt: new Date() } }
+    );
+  }
+
   // Update Partner Status And Availability
   async updateStatus(userId, isAvailable, currentStatus, options = {}) {
     const partnersCollection = await getCollection("partners");

@@ -93,6 +93,7 @@ class SocketService {
           if (!partner) return;
 
           await PartnerRepository.updateDriverLocation(userId, lng, lat);
+          await PartnerRepository.updateHeartbeat(userId).catch(() => { }); // Refresh Activity Heartbeat Precisely On Gps Update
 
           // Live Broadcast To Order Room If Driver Is On A Trip
           if (partner.currentOrderId) {
