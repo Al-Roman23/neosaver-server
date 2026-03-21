@@ -23,7 +23,14 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB Limit
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) { // Allow All Image Files
+    // Debug Log To Identify Non-standard Mime Types Sent By Frontend
+    const logger = require("../../utils/logger");
+    logger.info({ mimetype: file.mimetype, filename: file.originalname }, "Processing File Upload Filter.");
+
+    const isImageMime = file.mimetype.startsWith("image/");
+    const isImageExt = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.originalname);
+
+    if (isImageMime || isImageExt) {
       cb(null, true);
     } else {
       cb(new BadRequest("Only Image Files Are Allowed!"));
