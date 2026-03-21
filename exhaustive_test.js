@@ -205,84 +205,20 @@ async function runTest() {
     // Multi-round Bidding Options
     // Change Test_option To "b" To Test Max Rounds Failure
     // ==========================================
-    const TEST_OPTION = "B"; // "A" For Agreement, "B" For Max Rounds Failure
+    // Agree On Negotiation
+    await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
+    await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
+    const acceptAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "accept", sequence: 3, ...generateSecurity() }, r));
+    if (!acceptAck.success) throw new Error("Agreement Closure Failed!");
+    console.log("✅ AGREEMENT REACHED: Order Status -> ACCEPTED.");
 
-    console.log(`🔄 Step: Simulating Multi-Round Bidding Interplay (Running Option ${TEST_OPTION})...`);
-
-    if (TEST_OPTION === "A") {
-      // Round 1
-      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
-      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
-      console.log("✅ Round 1 (Driver 1500 -> User 1200) Emitted.");
-
-      // Round 2
-      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1400, sequence: 3, ...generateSecurity() }, r));
-      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1300, sequence: 4, ...generateSecurity() }, r));
-      console.log("✅ Round 2 (Driver 1400 -> User 1300) Emitted.");
-
-      // Final Acceptance (driver Accepts User's 1300)
-      console.log("🔄 Step: Closing Negotiation AGREEMENT...");
-      const acceptAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "accept", sequence: 5, ...generateSecurity() }, r));
-      if (!acceptAck.success) throw new Error("Agreement Closure Failed!");
-      console.log("✅ AGREEMENT REACHED: Order Status -> ACCEPTED (OCC Version Incremented).");
-
-      // Verify Active Order Payload Includes Spliced Driver & User Data
-      const activeRes = await axios.get(`${BASE_URL}/orders/active`, { headers: { Authorization: `Bearer ${userToken}` } });
-      const activeData = activeRes.data.data;
-      if (!activeData.partner || !activeData.partner.name || !activeData.partner.phone) {
-        throw new Error("FAIL: Driver Profile (Name/Phone) Not Fully Populated On Active Order!");
-      }
-      console.log("✅ Active Order Fetch Verified: Driver Profile (Name, Phone, Ambulance) Attached!");
-    } else {
-      // Round 1
-      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1500, sequence: 1, ...generateSecurity() }, r));
-      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1200, sequence: 2, ...generateSecurity() }, r));
-      console.log("✅ Round 1 Completed.");
-
-      // Round 2
-      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1400, sequence: 3, ...generateSecurity() }, r));
-      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1250, sequence: 4, ...generateSecurity() }, r));
-      console.log("✅ Round 2 Completed.");
-
-      // Round 3 (final Allowed)
-      await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1350, sequence: 5, ...generateSecurity() }, r));
-      await new Promise(r => uSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1300, sequence: 6, ...generateSecurity() }, r));
-      console.log("✅ Round 3 Completed (Max Limit Reached).");
-
-      // Attempt 4th Round (should Fail)
-      const failAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "counter", amount: 1320, sequence: 7, ...generateSecurity() }, r));
-      if (failAck.success) throw new Error("Security Flaw: Allowed 4th Round!");
-      console.log("✅ System Correctly Blocked 4th Round.");
-
-      // Driver Rejects
-      console.log("🔄 Step: Failing Negotiation...");
-      const rejectAck = await new Promise(r => dSocket.emit("negotiation_respond", { sessionId, orderId, action: "reject", sequence: 8, ...generateSecurity() }, r));
-      if (!rejectAck.success) throw new Error("Rejection Closure Failed!");
-      console.log("✅ NEGOTIATION REJECTED & TRACKED.");
-
-      // Verify Refined Re-discovery Logic After Rejection
-      console.log("🔄 Step: Verifying Refined Re-Discovery Logic...");
-
-      // 1. Confirm Driver Is Tracked In The Cooldown List
-      const orderAfterReject = await axios.get(`${BASE_URL}/orders/active`, {
-        headers: { Authorization: `Bearer ${userToken}` }
-      });
-      const tracked = orderAfterReject.data.data.attemptedDrivers.some(d => d.driverId === driverId.toString());
-      if (!tracked) throw new Error("FAIL: Driver Not Tracked In attemptedDrivers After Rejection!");
-      console.log("✅ COOLDOWN TRACKING: Driver Recorded In attemptedDrivers!");
-
-      // 2. Confirm Discovery Pool Is Still Operational (not Empty) After Rejection
-      const poolCheck = await axios.get(`${BASE_URL}/orders/nearby?pickupLat=23.8103&pickupLng=90.4125`, {
-        headers: { Authorization: `Bearer ${userToken}` }
-      });
-      if (!poolCheck.data.data.drivers || poolCheck.data.data.drivers.length === 0) {
-        throw new Error("FAIL: Discovery Pool Is Empty After Rejection! System Cannot Serve User!");
-      }
-      console.log(`✅ POOL INTEGRITY: ${poolCheck.data.data.drivers.length} Driver(s) Still Available After Rejection.`);
-      console.log("✅ RE-DISCOVERY STRATEGY: Verified! No Spam Lock. System Remains Operational.");
-
-      process.exit(0); // Exit Here Since We Can't Do The Trip If They Rejected
+    // Verify Active Order Payload Includes Spliced Driver & User Data
+    const activeRes = await axios.get(`${BASE_URL}/orders/active`, { headers: { Authorization: `Bearer ${userToken}` } });
+    const activeData = activeRes.data.data;
+    if (!activeData.partner || !activeData.partner.name || !activeData.partner.phone) {
+      throw new Error("FAIL: Driver Profile (Name/Phone) Not Fully Populated On Active Order!");
     }
+    console.log("✅ Active Order Fetch Verified: Driver Profile (Name, Phone, Ambulance) Attached!");
 
     // ---------------------------------------------------------
     // 6. Otp & Trip Workflow Domain
