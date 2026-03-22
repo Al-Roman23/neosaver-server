@@ -47,6 +47,8 @@ class PartnerService {
       isOnline: true,
       currentStatus: "online",
       currentOrderId: null,
+      isNegotiating: false,
+      negotiationLockExpiresAt: null,
       ambulanceImageUrl: null,
       location: null,
       lastLocationUpdate: null,
