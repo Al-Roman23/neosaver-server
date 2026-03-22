@@ -2,7 +2,10 @@
 const PartnerRepository = require("./partner.repository");
 const { ALLOWED_USER_FIELDS, ALLOWED_PARTNER_FIELDS, validatePartnerDetails } = require("./partner.validator");
 const UserRepository = require("../user/user.repository");
+const OrderRepository = require("../order/order.repository");
 const { uploadImageToImgBB } = require("../../utils/imgbb");
+const { Conflict, NotFound } = require("../../core/errors/errors");
+const { getCollection } = require("../../config/db");
 
 class PartnerService {
   async registerPartner(userId, details) {
@@ -12,23 +15,19 @@ class PartnerService {
     // Check If Partner Already Registered
     const existingPartner = await PartnerRepository.findByUserId(userId);
     if (existingPartner) {
-      const { Conflict } = require("../../core/errors/errors");
       throw new Conflict("You Have Already Submitted Your Partner Details!");
     }
 
     // Check Uniqueness For Mission-critical Documents (nid & License)
-    const { getCollection } = require("../../config/db");
     const partnersCollection = await getCollection("partners");
 
     const nidExists = await partnersCollection.findOne({ nationalId: details.nationalId });
     if (nidExists) {
-      const { Conflict } = require("../../core/errors/errors");
       throw new Conflict("This National ID (NID) Is Already Registered To Another Driver!");
     }
 
     const licenseExists = await partnersCollection.findOne({ driverLicenseNumber: details.licenseNumber });
     if (licenseExists) {
-      const { Conflict } = require("../../core/errors/errors");
       throw new Conflict("This Driver License Number Is Already Registered!");
     }
 
@@ -65,7 +64,6 @@ class PartnerService {
     const partner = await PartnerRepository.findByUserId(userId);
 
     if (!user) {
-      const { NotFound } = require("../../core/errors/errors");
       throw new NotFound("User Record Could Not Be Found!");
     }
 
@@ -105,7 +103,7 @@ class PartnerService {
         lastLocationUpdate: partner.lastLocationUpdate,
         lastSocketConnectedAt: partner.lastSocketConnectedAt,
         rating: partner.rating,
-        completedOrderCount: await (require("../order/order.repository").countCompletedByPartnerId(userId)),
+        completedOrderCount: await OrderRepository.countCompletedByPartnerId(userId),
         createdAt: partner.createdAt,
         updatedAt: partner.updatedAt,
       } : null,
@@ -130,7 +128,6 @@ class PartnerService {
       if (userUpdates.email && userUpdates.email !== user.email) {
         const emailExists = await UserRepository.findByEmail(userUpdates.email);
         if (emailExists) {
-          const { Conflict } = require("../../core/errors/errors");
           throw new Conflict("Email Address Is Already In Use By Another Account!");
         }
       }
@@ -138,7 +135,6 @@ class PartnerService {
       if (userUpdates.phone && userUpdates.phone !== user.phone) {
         const phoneExists = await UserRepository.findByPhone(userUpdates.phone);
         if (phoneExists) {
-          const { Conflict } = require("../../core/errors/errors");
           throw new Conflict("Phone Number Is Already In Use By Another Account!");
         }
       }
@@ -159,7 +155,6 @@ class PartnerService {
   async updateStatus(userId, currentStatus) {
     const partner = await PartnerRepository.findByUserId(userId);
     if (!partner) {
-      const { Conflict } = require("../../core/errors/errors");
       throw new Conflict("Partner Record Could Not Be Found!");
     }
 
@@ -175,7 +170,6 @@ class PartnerService {
   async updateLocation(userId, latitude, longitude) {
     const partner = await PartnerRepository.findByUserId(userId);
     if (!partner) {
-      const { Conflict } = require("../../core/errors/errors");
       throw new Conflict("Partner Record Could Not Be Found!");
     }
 
@@ -197,7 +191,6 @@ class PartnerService {
   async uploadAmbulanceImage(userId, fileBuffer, originalName) {
     const partner = await PartnerRepository.findByUserId(userId);
     if (!partner) {
-      const { Conflict } = require("../../core/errors/errors");
       throw new Conflict("Partner Record Could Not Be Found!");
     }
 

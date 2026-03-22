@@ -182,7 +182,7 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
       { userId: new ObjectId(userId) },
-      { 
+      {
         $inc: { totalTrips: 1 },
         $set: { updatedAt: new Date() }
       },

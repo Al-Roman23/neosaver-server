@@ -1,5 +1,8 @@
 // This File Handles The Partner Controller
 const PartnerService = require("./partner.service");
+const PartnerRepository = require("./partner.repository");
+const { validatePartnerProfileUpdate, validateStatusUpdate } = require("./partner.validator");
+const { BadRequest } = require("../../core/errors/errors");
 
 class PartnerController {
   // Save Partner Details
@@ -36,7 +39,6 @@ class PartnerController {
   async updateProfile(req, res, next) {
     try {
       const userId = req.user.id;
-      const { validatePartnerProfileUpdate } = require("./partner.validator");
 
       validatePartnerProfileUpdate(req.body);
       const updatedProfile = await PartnerService.updatePartnerProfile(userId, req.body);
@@ -55,7 +57,6 @@ class PartnerController {
   async updateStatus(req, res, next) {
     try {
       const userId = req.user.id;
-      const { validateStatusUpdate } = require("./partner.validator");
 
       validateStatusUpdate(req.body);
       const updatedProfile = await PartnerService.updateStatus(userId, req.body.currentStatus);
@@ -77,7 +78,6 @@ class PartnerController {
       const { latitude, longitude } = req.body;
 
       if (latitude == null || longitude == null) {
-        const { BadRequest } = require("../../core/errors/errors");
         throw new BadRequest("Latitude And Longitude Are Required!");
       }
 
@@ -134,7 +134,6 @@ class PartnerController {
     try {
       const { id: partnerId } = req.params;
       const { isVerified } = req.body;
-      const PartnerRepository = require("./partner.repository");
 
       const updated = await PartnerRepository.verifyPartner(partnerId, isVerified);
       if (updated.matchedCount === 0) throw new Error("Partner Not Found!");
