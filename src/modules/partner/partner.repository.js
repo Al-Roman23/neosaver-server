@@ -176,6 +176,19 @@ class PartnerRepository {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.find({ isAvailable: true, isVerified: true }).toArray();
   }
+
+  // Increment Successful Trip Counter For A Specific Driver
+  async incrementTrips(userId, options = {}) {
+    const partnersCollection = await getCollection("partners");
+    return partnersCollection.updateOne(
+      { userId: new ObjectId(userId) },
+      { 
+        $inc: { totalTrips: 1 },
+        $set: { updatedAt: new Date() }
+      },
+      options
+    );
+  }
 }
 
 module.exports = new PartnerRepository();

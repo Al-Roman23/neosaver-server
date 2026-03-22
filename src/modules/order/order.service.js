@@ -322,6 +322,7 @@ class OrderService {
     if (!updated) throw new BadRequest("Invalid Trip State For Completion!");
 
     await PartnerRepository.unlockDriver(partnerId);
+    await PartnerRepository.incrementTrips(partnerId); // Synchronize Static Trip Counter
     const socketService = require("../../core/socket");
 
     // Broadcast Status Update To Trip Room
