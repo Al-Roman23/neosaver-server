@@ -53,13 +53,24 @@ class NegotiationService {
       let negotiationSession = null;
 
       await session.withTransaction(async () => {
-        // 1. Lock Driver Atomically
-        const driverLock = await PartnerRepository.lockForNegotiation(driverId, 60000, { session });
-        if (!driverLock) {
-          throw new Conflict("Driver Is Currently Busy Or In Another Negotiation!");
+        // 1. Diagnostics: Check If Driver Exists And Why Lock Might Fail
+        const driver = await PartnerRepository.findByUserId(driverId);
+        if (!driver) {
+          throw new NotFound(`Driver Profile For User Id ${driverId} Not Found!`);
         }
 
-        // 2. Create Negotiation Session Document
+        if (driver.currentOrderId || driver.isNegotiating) {
+          const reason = driver.currentOrderId ? "On Trip" : "Already Negotiating";
+          throw new Conflict(`Driver Is Busy: ${reason} (Order=${driver.currentOrderId})`);
+        }
+
+        // 2. Lock Driver Atomically
+        const driverLock = await PartnerRepository.lockForNegotiation(driverId, 60000, { session });
+        if (!driverLock) {
+          throw new Conflict("Driver Is Currently Busy (Atomic Lock Failed).");
+        }
+
+        // 3. Create Negotiation Session Document
         negotiationSession = await NegotiationRepository.createSession({
           orderId,
           userId,
@@ -68,7 +79,7 @@ class NegotiationService {
           expiresAt: new Date(Date.now() + 99000), // 99s To Respond
         }, { session });
 
-        // 3. Atomically Link Negotiation To Order
+        // 4. Atomically Link Negotiation To Order
         const order = await OrderRepository.initiateNegotiation(orderId, negotiationSession._id, version, { session });
         if (!order) {
           throw new Conflict("Unable To Start Negotiation — Order State Has Changed!");
