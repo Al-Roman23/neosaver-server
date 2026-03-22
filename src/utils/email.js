@@ -1,4 +1,5 @@
 // This File Handles The Email Sending System
+const dns = require("dns");
 const nodemailer = require("nodemailer");
 const logger = require("./logger");
 
@@ -11,7 +12,10 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  family: 4,
+  // This Explicitly Forces Only IPv4 Addresses To Be Used
+  lookup: (hostname, options, callback) => {
+    dns.lookup(hostname, { family: 4 }, callback);
+  },
 });
 
 // Verify Transporter Connection On Startup
