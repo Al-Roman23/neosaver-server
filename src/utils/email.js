@@ -9,6 +9,7 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  family: 4,
 });
 
 // Verify Transporter Connection On Startup
@@ -21,6 +22,7 @@ transporter.verify((error) => {
 // Send Password Reset Email
 async function sendPasswordResetEmail(toEmail, resetToken) {
   const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+
   const mailOptions = {
     from: `"Neo Saver" <${process.env.EMAIL_USER}>`,
     to: toEmail,
@@ -43,6 +45,7 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
   };
 
   await transporter.sendMail(mailOptions);
+
   logger.info({ toEmail }, "Password Reset Email Sent Successfully!");
 }
 
