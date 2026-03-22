@@ -70,7 +70,7 @@ class OrderService {
             from: "orders",
             let: { partner_uid: { $toString: "$userId" } },
             pipeline: [
-              { $match: { $expr: { $and: [ { $eq: [{ $toString: "$partnerId" }, "$$partner_uid"] }, { $eq: ["$status", "completed"] } ] } } },
+              { $match: { $expr: { $and: [{ $eq: [{ $toString: "$partnerId" }, "$$partner_uid"] }, { $eq: ["$status", "completed"] }] } } },
               { $project: { _id: 1 } }
             ],
             as: "completedTrips"
@@ -107,7 +107,7 @@ class OrderService {
   }
 
   // Create A New Order In Pending State For User Discovery
-  async createOrder(userId, { pickupLng, pickupLat, destinationLng, destinationLat, notes }) {
+  async createOrder(userId, { pickupLng, pickupLat, destinationLng, destinationLat, notes, fareEstimate, partnerId, ambulanceType }) {
     if (!pickupLng || !pickupLat || !destinationLng || !destinationLat) {
       throw new BadRequest("Pickup And Destination Coordinates Are Required!");
     }
@@ -121,13 +121,14 @@ class OrderService {
     // Create The Pending Order
     const order = await OrderRepository.createOrder({
       userId: new ObjectId(userId),
-      partnerId: null,
+      partnerId: partnerId ? new ObjectId(partnerId) : null,
       status: "pending",
       pickupLocation: { type: "Point", coordinates: [parseFloat(pickupLng), parseFloat(pickupLat)] },
       destinationLocation: { type: "Point", coordinates: [parseFloat(destinationLng), parseFloat(destinationLat)] },
       driverLocation: null,
       notes: notes || null,
-      fareEstimate: null,
+      fareEstimate: fareEstimate ? parseFloat(fareEstimate) : null,
+      ambulanceType: ambulanceType || null,
       acceptedAt: null,
       pickupStartedAt: null,
       completedAt: null,
@@ -182,7 +183,7 @@ class OrderService {
 
         // Unlock Driver Completely
         const driverToUnlock = order.partnerId ? order.partnerId.toString() : (cancelBy === "driver" ? normalizedUserId : null);
-        
+
         if (driverToUnlock) {
           await PartnerRepository.unlockDriver(driverToUnlock, { session: dbSession });
           const socketService = require("../../core/socket");

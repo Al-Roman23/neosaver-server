@@ -6,15 +6,26 @@ class OrderController {
   async createOrder(req, res, next) {
     try {
       const userId = req.user.id;
-      const { pickupLng, pickupLat, destinationLng, destinationLat, notes } = req.body;
+      const { 
+        pickupLng, pickupLat, 
+        destinationLng, destinationLat, 
+        pickupLocation, destinationLocation,
+        notes, fareEstimate, partnerId, ambulanceType 
+      } = req.body;
 
-      const order = await OrderService.createOrder(userId, {
-        pickupLng,
-        pickupLat,
-        destinationLng,
-        destinationLat,
+      // Extract Coordinates From Either Top-Level Or Nested Payload
+      const orderData = {
+        pickupLng: pickupLng || (pickupLocation ? pickupLocation.lng : null),
+        pickupLat: pickupLat || (pickupLocation ? pickupLocation.lat : null),
+        destinationLng: destinationLng || (destinationLocation ? destinationLocation.lng : null),
+        destinationLat: destinationLat || (destinationLocation ? destinationLocation.lat : null),
         notes,
-      });
+        fareEstimate,
+        partnerId,
+        ambulanceType
+      };
+
+      const order = await OrderService.createOrder(userId, orderData);
 
       res.status(201).json({
         success: true,
