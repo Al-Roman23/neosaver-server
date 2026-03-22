@@ -1,39 +1,24 @@
-// This File Handles The Email Sending System
-const dns = require("dns");
-const nodemailer = require("nodemailer");
+// This File Handles The Email Sending System Via Brevo Api
+const axios = require("axios");
 const logger = require("./logger");
 
-// This Creates A Reusable Email Transporter Using Explicit SMTP Configuration
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // Use STARTTLS For Port 587
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  // This Explicitly Forces Only IPv4 Addresses To Be Used
-  lookup: (hostname, options, callback) => {
-    dns.lookup(hostname, { family: 4 }, callback);
-  },
-});
-
-// Verify Transporter Connection On Startup
-transporter.verify((error) => {
-  if (error) {
-    logger.error({ error }, "Email Transporter Connection Failed!");
-  }
-});
-
-// Send Password Reset Email
+// This Sends A Password Reset Email To The User Using Brevo HTTP API
 async function sendPasswordResetEmail(toEmail, resetToken) {
   const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+  const apiKey = process.env.BREVO_API_KEY;
 
-  const mailOptions = {
-    from: `"Neo Saver" <${process.env.EMAIL_USER}>`,
-    to: toEmail,
+  const emailData = {
+    sender: {
+      name: "Neo Saver",
+      email: process.env.EMAIL_USER,
+    },
+    to: [
+      {
+        email: toEmail,
+      },
+    ],
     subject: "Password Reset Request",
-    html: `
+    htmlContent: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #d32f2f;">Neo Saver</h2>
         <p>Hello,</p>
@@ -50,9 +35,22 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  try {
+    await axios.post("https://api.brevo.com/v3/smtp/email", emailData, {
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+    });
 
-  logger.info({ toEmail }, "Password Reset Email Sent Successfully!");
+    logger.info({ toEmail }, "Password Reset Email Sent Successfully Via Brevo API!");
+  } catch (error) {
+    const errorData = error.response ? error.response.data : error.message;
+    logger.error({ error: errorData, toEmail }, "Failed To Send Password Reset Email Via Brevo!");
+    throw error;
+  }
 }
 
-module.exports = { sendPasswordResetEmail };
+module.exports = {
+  sendPasswordResetEmail,
+};
