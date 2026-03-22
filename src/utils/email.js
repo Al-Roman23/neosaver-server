@@ -5,15 +5,18 @@ const logger = require("./logger");
 // This Creates A Reusable Email Transporter Using SMTP Configuration
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // Use Implicit SSL For Port 465
+  port: 587,
+  secure: false, // Use STARTTLS For Port 587
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  // This Forces The Connection To Use IPv4 And Avoids Networking Timeouts
+  connectionTimeout: 10000,
+  family: 4
 });
 
-// Verify Transporter Connection Silently On Startup (Preventing App Crash)
+// This Verifies The Transporter Connection Silently On Startup To Prevent Crashes
 transporter.verify((error) => {
   if (error) {
     logger.warn("Email Transporter Is Offline. Forgot To Set App Password? Registration/Reset Emails Will Fail.");
