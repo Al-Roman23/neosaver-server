@@ -70,6 +70,29 @@ class PartnerController {
     }
   }
 
+  // Handle Manual GPS Location Update Via HTTP API
+  async updateLocation(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { latitude, longitude } = req.body;
+
+      if (latitude == null || longitude == null) {
+        const { BadRequest } = require("../../core/errors/errors");
+        throw new BadRequest("Latitude And Longitude Are Required!");
+      }
+
+      const updatedProfile = await PartnerService.updateLocation(userId, latitude, longitude);
+
+      res.status(200).json({
+        success: true,
+        message: "Location Updated Successfully!",
+        data: updatedProfile,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Handle Imgbb Ambulance Image Upload
   async uploadAmbulanceImage(req, res, next) {
     try {

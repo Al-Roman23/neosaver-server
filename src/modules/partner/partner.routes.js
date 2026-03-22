@@ -12,6 +12,7 @@ router.post("/details", verifyAuthToken, verifyRole(["driver"]), PartnerControll
 router.get("/profile", verifyAuthToken, verifyRole(["driver"]), PartnerController.getProfile);
 router.put("/profile", verifyAuthToken, verifyRole(["driver"]), PartnerController.updateProfile);
 router.patch("/status", verifyAuthToken, verifyRole(["driver"]), PartnerController.updateStatus);
+router.patch("/profile/location", verifyAuthToken, verifyRole(["driver"]), PartnerController.updateLocation);
 
 // Admin Route -> Verify Driver Manually
 router.patch("/:id/verify", verifyAuthToken, verifyRole(["admin"]), PartnerController.verifyPartner);

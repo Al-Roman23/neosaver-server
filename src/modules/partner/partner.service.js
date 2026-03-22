@@ -44,9 +44,9 @@ class PartnerService {
       contactNumber: details.contactNumber,
       email: details.email.toLowerCase().trim(),
       hospitalOrCompanyName: details.companyName,
-      isAvailable: false,
-      isOnline: false,
-      currentStatus: "offline",
+      isAvailable: true,
+      isOnline: true,
+      currentStatus: "online",
       currentOrderId: null,
       ambulanceImageUrl: null,
       location: null,
@@ -161,6 +161,28 @@ class PartnerService {
     const isAvailable = currentStatus === "online";
     const isOnline = currentStatus === "online";
     await PartnerRepository.updateByUserId(userId, { currentStatus, isAvailable, isOnline });
+
+    return await this.getPartnerProfile(userId);
+  }
+
+  // Handle Manual GPS Location Update Via HTTP API
+  async updateLocation(userId, latitude, longitude) {
+    const partner = await PartnerRepository.findByUserId(userId);
+    if (!partner) {
+      const { Conflict } = require("../../core/errors/errors");
+      throw new Conflict("Partner Record Could Not Be Found!");
+    }
+
+    const locationData = {
+      type: "Point",
+      coordinates: [parseFloat(longitude), parseFloat(latitude)],
+    };
+
+    await PartnerRepository.updateByUserId(userId, {
+      location: locationData,
+      lastLocationUpdate: new Date(),
+      lastAppHeartbeatAt: new Date(), // Implicit Heartbeat
+    });
 
     return await this.getPartnerProfile(userId);
   }
