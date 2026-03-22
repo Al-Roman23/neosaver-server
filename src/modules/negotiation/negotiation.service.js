@@ -64,7 +64,7 @@ class NegotiationService {
         expiresAt: new Date(Date.now() + 99000), // 99s To Respond
       });
 
-      // 3. Link Negotiation To Order (with OCC Version Guard)
+      // 3. Link Negotiation To Order (With OCC Version Guard)
       const order = await OrderRepository.initiateNegotiation(orderId, negotiationSession._id, version);
       if (!order) {
         // Rollback: Unlock Driver And Remove Session If Order Link Fails
@@ -94,7 +94,7 @@ class NegotiationService {
     const roundCount = negotiation.messages.length;
     const finalPrice = negotiation.messages[roundCount - 1]?.amount;
 
-    // 2. Update Order Status (guarded By OCC)
+    // 2. Update Order Status (Guarded By OCC)
     const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, negotiation.driverId, "negotiating", "accepted", {
       partnerId: new ObjectId(negotiation.driverId),
       acceptedAt: new Date(),
@@ -111,7 +111,7 @@ class NegotiationService {
     // 4. Close Negotiation Session
     await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
 
-    // 5. Log Analytics Asynchronously (non-critical — does not block flow)
+    // 5. Log Analytics Asynchronously (Non-Critical — Does Not Block Flow)
     const order = await OrderRepository.findById(orderId);
     AnalyticsService.logNegotiationEvent(
       orderId,
@@ -141,7 +141,7 @@ class NegotiationService {
     // 3. Reset Order State And Record Attempt
     await OrderRepository.recordNegotiationAttempt(negotiation.orderId, negotiation.driverId);
 
-    // 4. Log Analytics Asynchronously (non-critical)
+    // 4. Log Analytics Asynchronously (Non-Critical)
     AnalyticsService.logNegotiationEvent(
       negotiation.orderId,
       sessionId,

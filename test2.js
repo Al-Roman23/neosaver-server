@@ -17,8 +17,8 @@ const ORDER_ID = "69c0240c5924b2f4b58cd5af";
 const DRIVER_ID = "69c0064edd0fd583422e1fda";
 // --------------------------------------------
 
-const userSocket = io(SERVER_URL, { auth: { token: USER_TOKEN }, transports: ['websocket'] });
-const driverSocket = io(SERVER_URL, { auth: { token: DRIVER_TOKEN }, transports: ['websocket'] });
+const userSocket = io(SERVER_URL, { auth: { token: USER_TOKEN }, transports: ["websocket"], reconnection: false });
+const driverSocket = io(SERVER_URL, { auth: { token: DRIVER_TOKEN }, transports: ["websocket"], reconnection: false });
 
 let sessionId = null;
 

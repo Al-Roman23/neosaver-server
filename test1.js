@@ -13,12 +13,12 @@ const SERVER_URL = "https://neosaver-server.onrender.com"; // Or your Render URL
 const USER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YmZlYzFlMjQxOTlkZGU5MTFiNzAxZCIsImVtYWlsIjoiYWxyb21hbjEyMTUyMDA0QGdtYWlsLmNvbSIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzc0MTk5NzM4LCJleHAiOjE3NzQyMDMzMzh9.pXpBkBTQhPYEFtilS0idgOXRbx2IMby2BdCT49WlRXg";
 const DRIVER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YzAwNjRlZGQwZmQ1ODM0MjJlMWZkYSIsImVtYWlsIjoiYWxyb21hbjIwMDQxMjE1QGdtYWlsLmNvbSIsInJvbGUiOiJkcml2ZXIiLCJpYXQiOjE3NzQxOTk2NjAsImV4cCI6MTc3NDIwMzI2MH0.tghsHvRAAcwn2d4mXEGWdwr0b54054CJhpAP4ja1-oo";
 
-const ORDER_ID = "69c02ac7895a4c6b379a5064";
+const ORDER_ID = "69c0300bbe9a19ff07440a8c";
 const DRIVER_ID = "69c0064edd0fd583422e1fda";
 // --------------------------------------------
 
-const userSocket = io(SERVER_URL, { auth: { token: USER_TOKEN }, transports: ['websocket'] });
-const driverSocket = io(SERVER_URL, { auth: { token: DRIVER_TOKEN }, transports: ['websocket'] });
+const userSocket = io(SERVER_URL, { auth: { token: USER_TOKEN }, transports: ["websocket"], reconnection: false });
+const driverSocket = io(SERVER_URL, { auth: { token: DRIVER_TOKEN }, transports: ["websocket"], reconnection: false });
 
 let sessionId = null;
 
@@ -112,5 +112,15 @@ userSocket.on("negotiation_finalized", (data) => {
     process.exit(0);
 });
 
-userSocket.on("connect_error", (err) => console.error("User Socket Error:", err.message));
-driverSocket.on("connect_error", (err) => console.error("Driver Socket Error:", err.message));
+// Exit Cleanly If Connection Drops (avoids Double-lock On Reconnect)
+userSocket.on("disconnect", (reason) => {
+    console.error("❌ User Disconnected:", reason, "| Driver May Still Be Locked — Run cleanup.js Before Next Test.");
+    process.exit(1);
+});
+driverSocket.on("disconnect", (reason) => {
+    console.error("❌ Driver Disconnected:", reason, "| Driver May Still Be Locked — Run cleanup.js Before Next Test.");
+    process.exit(1);
+});
+
+userSocket.on("connect_error", (err) => { console.error("User Socket Error:", err.message); process.exit(1); });
+driverSocket.on("connect_error", (err) => { console.error("Driver Socket Error:", err.message); process.exit(1); });
