@@ -1,12 +1,12 @@
 // This File Handles The Analytics Engine For Business Insights
 const { getCollection } = require("../../config/db");
+const { ObjectId } = require("mongodb");
 const logger = require("../../utils/logger");
 
 class AnalyticsService {
-  // Record A Negotiation Round Completion For Kpi Tracking
+  // Record A Negotiation Round Completion For KPI Tracking
   async logNegotiationEvent(orderId, sessionId, driverId, round, outcome, finalAmount = null, estimatedFare = null) {
     try {
-      const { ObjectId } = require("mongodb");
       const collection = await getCollection("negotiation_analytics");
       await collection.insertOne({
         orderId: new ObjectId(orderId),
@@ -23,7 +23,7 @@ class AnalyticsService {
     }
   }
 
-  // Record Driver Penalty (post-otp Cancellation)
+  // Record Driver Penalty (Post-OTP Cancellation)
   async logDriverPenalty(driverId, orderId, reason) {
     try {
       const collection = await getCollection("driver_penalties");
@@ -38,7 +38,7 @@ class AnalyticsService {
     }
   }
 
-  // Retrieve Aggregated Conversion Rates (mock Implementation For Dashboard)
+  // Retrieve Aggregated Conversion Rates (Mock Implementation For Dashboard)
   async getCompletionMetrics() {
     const collection = await getCollection("negotiation_analytics");
     return collection.aggregate([

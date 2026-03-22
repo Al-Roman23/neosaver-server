@@ -5,16 +5,16 @@ const NegotiationService = require("../negotiation/negotiation.service");
 const UserRepository = require("../user/user.repository");
 const NegotiationRepository = require("../negotiation/negotiation.repository");
 const socketService = require("../../core/socket");
-const { getCollection, client } = require("../../config/db");
+const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { BadRequest, Conflict, NotFound } = require("../../core/errors/errors");
 const logger = require("../../utils/logger");
 
-// In-memory Registry: Orderid -> Set Of Dispatched Driverids In Current Batch
+// In-memory Registry: OrderId -> Set Of Dispatched DriverIds In Current Batch
 const dispatchRegistry = new Map();
-// In-memory Registry: Orderid -> Global Expiry Settimeout Handle
+// In-memory Registry: OrderId -> Global Expiry SetTimeout Handle
 const expiryTimers = new Map();
-// In-memory Registry: Orderid -> Promise Resolver For Waitforacceptance()
+// In-memory Registry: OrderId -> Promise Resolver For WaitForAcceptance()
 const acceptanceResolvers = new Map();
 
 class OrderService {
@@ -138,63 +138,52 @@ class OrderService {
     return order;
   }
 
-  // User Or Driver Cancels An Order (Supports Granular Penalty Logic)
+  // User Or Driver Cancels An Order (Supports Granular Penalty Logic — No Transactions)
   async cancelOrder(orderId, userId, cancelBy = "user") {
-    const dbSession = client.startSession();
-    try {
-      let result = null;
+    const order = await OrderRepository.findById(orderId);
+    if (!order) throw new NotFound("Order Not Found!");
 
-      await dbSession.withTransaction(async () => {
-        const order = await OrderRepository.findById(orderId);
-        if (!order) throw new NotFound("Order Not Found!");
+    // Security Verification: Can Only Be Status Changed By Participant
+    const normalizedUserId = userId.toString();
+    const isUser = order.userId.toString() === normalizedUserId;
+    const isDriver = order.partnerId && order.partnerId.toString() === normalizedUserId;
+    if (!isUser && !isDriver) throw new BadRequest("Unauthorized To Cancel This Order!");
 
-        // Security Verification: Can Only Be Status Changed By Participant
-        const normalizedUserId = userId.toString();
-        const isUser = order.userId.toString() === normalizedUserId;
-        const isDriver = order.partnerId && order.partnerId.toString() === normalizedUserId;
-        if (!isUser && !isDriver) throw new BadRequest("Unauthorized To Cancel This Order!");
-
-        // Forbidden If Already Completed
-        if (["completed", "cancelled_by_user", "cancelled_by_driver"].includes(order.status)) {
-          throw new BadRequest("Order Is Already Finalized!");
-        }
-
-        // Penalty Logic: Mid-trip Cancellations (after Pickup Or In-transport)
-        const isMidTrip = ["to_destination", "pickup_started", "arrived"].includes(order.status);
-        const penaltyApplied = isDriver && isMidTrip;
-
-        const newStatus = cancelBy === "user" ? "cancelled_by_user" : "cancelled_by_driver";
-
-        await OrderRepository.updateStatus(orderId, newStatus, {
-          cancelledAt: new Date(),
-          cancelledBy: cancelBy,
-          penaltyFlag: penaltyApplied
-        }, { session: dbSession });
-
-        // Log Penalty To Dedicated Tracking Layer
-        if (penaltyApplied) {
-          await AnalyticsService.logDriverPenalty(order.partnerId.toString(), orderId, "mid_trip_cancellation");
-        }
-
-        // Unlock Driver Completely
-        const driverToUnlock = order.partnerId ? order.partnerId.toString() : (cancelBy === "driver" ? normalizedUserId : null);
-
-        if (driverToUnlock) {
-          await PartnerRepository.unlockDriver(driverToUnlock, { session: dbSession });
-          socketService.io.to("driver_" + driverToUnlock).emit("order_cancelled", { orderId, by: cancelBy });
-          socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
-        }
-
-        result = {
-          message: `Order Cancelled By ${cancelBy.toUpperCase()}!`,
-          penaltyFlag: penaltyApplied
-        };
-      });
-
-      return result;
-    } finally {
-      await dbSession.endSession();
+    // Forbidden If Already Completed
+    if (["completed", "cancelled_by_user", "cancelled_by_driver"].includes(order.status)) {
+      throw new BadRequest("Order Is Already Finalized!");
     }
+
+    // Penalty Logic: Mid-trip Cancellations (After Pickup Or In-transport)
+    const isMidTrip = ["to_destination", "pickup_started", "arrived"].includes(order.status);
+    const penaltyApplied = isDriver && isMidTrip;
+
+    const newStatus = cancelBy === "user" ? "cancelled_by_user" : "cancelled_by_driver";
+
+    await OrderRepository.updateStatus(orderId, newStatus, {
+      cancelledAt: new Date(),
+      cancelledBy: cancelBy,
+      penaltyFlag: penaltyApplied
+    });
+
+    // Log Penalty To Dedicated Tracking Layer
+    if (penaltyApplied) {
+      await AnalyticsService.logDriverPenalty(order.partnerId.toString(), orderId, "mid_trip_cancellation");
+    }
+
+    // Unlock Driver Completely
+    const driverToUnlock = order.partnerId ? order.partnerId.toString() : (cancelBy === "driver" ? normalizedUserId : null);
+
+    if (driverToUnlock) {
+      await PartnerRepository.unlockDriver(driverToUnlock);
+      socketService.io.to("driver_" + driverToUnlock).emit("order_cancelled", { orderId, by: cancelBy });
+      socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
+    }
+
+    return {
+      message: `Order Cancelled By ${cancelBy.toUpperCase()}!`,
+      penaltyFlag: penaltyApplied
+    };
   }
 
   // Get Detailed Information For A Single Order (Includes Non-sensitive User Profile)

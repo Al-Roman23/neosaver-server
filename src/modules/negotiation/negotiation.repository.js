@@ -40,7 +40,7 @@ class NegotiationRepository {
       {
         _id: new ObjectId(sessionId),
         status: "active",
-        currentRound: { $lt: 6 }, // 6 messages = EXACTLY 3 Full Rounds (Driver x3 + User x3)
+        currentRound: { $lt: 6 }, // 6 Messages = EXACTLY 3 Full Rounds (Driver x3 + User x3)
         // Enforce Sequence Integrity At Db Level
         lastSequence: { $lt: message.sequence }
       },

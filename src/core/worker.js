@@ -53,7 +53,6 @@ class BackgroundWorker {
   // Task: Release Drivers With Stale Background Grace Periods (10+ Mins)
   async reconcileBackgroundGracePeriods() {
     try {
-      const { getCollection } = require("../config/db");
       const partnersCollection = await getCollection("partners");
 
       const staleThreshold = new Date(Date.now() - 59 * 60 * 1000); // 59 Minutes Dead Man Switch
