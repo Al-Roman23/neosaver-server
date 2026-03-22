@@ -78,6 +78,7 @@ async function startServer() {
 // Graceful Shutdown Handler
 async function shutdown(signal) {
   logger.info(`Received ${signal}. Closing server...`);
+
   if (serverInstance) {
     serverInstance.close(async () => {
       logger.info("HTTP server closed!");
