@@ -215,8 +215,8 @@ class SocketService {
 
           ack({ success: true });
         } catch (error) {
-          logger.error({ error, userId }, "Bidding Interaction Cycle Failed!");
-          ack({ success: false });
+          logger.error({ errorName: error.name, errorMessage: error.message, userId }, "Bidding Interaction Cycle Failed!");
+          ack({ success: false, message: "Server-side Interaction Conflict!" });
         }
       });
 
