@@ -3,7 +3,7 @@ const NegotiationRepository = require("./negotiation.repository");
 const OrderRepository = require("../order/order.repository");
 const PartnerRepository = require("../partner/partner.repository");
 const AnalyticsService = require("../analytics/analytics.service");
-const { getCollection, client } = require("../../config/db");
+const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { Conflict, NotFound } = require("../../core/errors/errors");
 const logger = require("../../utils/logger");
@@ -46,131 +46,111 @@ class NegotiationService {
     };
   }
 
-  // Initiate A New Negotiation Session With Analytics Handshake
+  // Initiate A New Negotiation Session (No Transactions — Compatible With All MongoDB Tiers)
   async initiate(userId, { orderId, driverId, version }) {
-    const session = client.startSession();
+    // 1. Atomically Lock Driver — Returns Null If Driver Is Busy
+    const driverLock = await PartnerRepository.lockForNegotiation(driverId, 60000);
+    if (!driverLock) {
+      throw new Conflict("Driver Is Currently Busy Or In Another Negotiation!");
+    }
+
     try {
-      let negotiationSession = null;
-
-      await session.withTransaction(async () => {
-        // 1. Lock Driver Atomically
-        const driverLock = await PartnerRepository.lockForNegotiation(driverId, 60000, { session });
-        if (!driverLock) {
-          throw new Conflict("Driver Is Currently Busy Or In Another Negotiation!");
-        }
-
-        // 3. Create Negotiation Session Document
-        negotiationSession = await NegotiationRepository.createSession({
-          orderId,
-          userId,
-          driverId,
-          messages: [],
-          expiresAt: new Date(Date.now() + 99000), // 99s To Respond
-        }, { session });
-
-        // 4. Atomically Link Negotiation To Order
-        const order = await OrderRepository.initiateNegotiation(orderId, negotiationSession._id, version, { session });
-        if (!order) {
-          throw new Conflict("Unable To Start Negotiation — Order State Has Changed!");
-        }
+      // 2. Create Negotiation Session Document
+      const negotiationSession = await NegotiationRepository.createSession({
+        orderId,
+        userId,
+        driverId,
+        messages: [],
+        expiresAt: new Date(Date.now() + 99000), // 99s To Respond
       });
+
+      // 3. Link Negotiation To Order (with OCC Version Guard)
+      const order = await OrderRepository.initiateNegotiation(orderId, negotiationSession._id, version);
+      if (!order) {
+        // Rollback: Unlock Driver And Remove Session If Order Link Fails
+        await PartnerRepository.unlockFromNegotiation(driverId);
+        await NegotiationRepository.updateStatus(negotiationSession._id.toString(), "rejected", { endedReason: "order_state_changed" });
+        throw new Conflict("Unable To Start Negotiation — Order State Has Changed!");
+      }
 
       return negotiationSession;
-    } finally {
-      await session.endSession();
+    } catch (err) {
+      // Safety Net: Ensure Driver Is Never Left Permanently Locked
+      if (!(err instanceof Conflict)) {
+        await PartnerRepository.unlockFromNegotiation(driverId).catch(() => { });
+      }
+      throw err;
     }
   }
 
-  // Transactional Completion: Agreement Reached & Analytics Recorded
+  // Complete Negotiation: Agreement Reached And Analytics Recorded (No Transactions)
   async completeNegotiation(sessionId, orderId) {
-    const dbSession = client.startSession();
-    try {
-      let result = null;
-
-      await dbSession.withTransaction(async () => {
-        const negotiation = await NegotiationRepository.findById(sessionId);
-        if (!negotiation || negotiation.status !== "active") {
-          throw new Conflict("Negotiation Session Inactive Or Already Closed!");
-        }
-
-        // 1. Derive Critical Values (truth From Message History)
-        const roundCount = negotiation.messages.length;
-        const finalPrice = negotiation.messages[roundCount - 1].amount;
-
-        // 2. Transactional Order Status Update (guarded By Occ)
-        const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, negotiation.driverId, "negotiating", "accepted", {
-          partnerId: new ObjectId(negotiation.driverId),
-          acceptedAt: new Date(),
-          finalFare: finalPrice
-        }, { session: dbSession });
-
-        if (!updatedOrder) {
-          throw new Conflict("Double-booking Collision Or State Mismatch Detected!");
-        }
-
-        // 3. System Lock: Bind Driver To The Operational Trip
-        await PartnerRepository.lockDriver(negotiation.driverId, orderId, { session: dbSession });
-
-        // 4. Close Session Documentation
-        await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" }, { session: dbSession });
-
-        // 5. Terminal Analytics Log (single Source Of Truth)
-        const order = await OrderRepository.findById(orderId);
-        await AnalyticsService.logNegotiationEvent(
-          orderId,
-          sessionId,
-          negotiation.driverId,
-          roundCount,
-          "accepted",
-          finalPrice,
-          order?.fareEstimate // Baseline Delta
-        );
-
-        result = { orderId, finalPrice };
-      });
-
-      return result;
-    } finally {
-      await dbSession.endSession();
+    const negotiation = await NegotiationRepository.findById(sessionId);
+    if (!negotiation || negotiation.status !== "active") {
+      throw new Conflict("Negotiation Session Inactive Or Already Closed!");
     }
+
+    // 1. Derive Critical Values From Message History
+    const roundCount = negotiation.messages.length;
+    const finalPrice = negotiation.messages[roundCount - 1]?.amount;
+
+    // 2. Update Order Status (guarded By OCC)
+    const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, negotiation.driverId, "negotiating", "accepted", {
+      partnerId: new ObjectId(negotiation.driverId),
+      acceptedAt: new Date(),
+      finalFare: finalPrice
+    });
+
+    if (!updatedOrder) {
+      throw new Conflict("Double-booking Collision Or State Mismatch Detected!");
+    }
+
+    // 3. Bind Driver To Operational Trip
+    await PartnerRepository.lockDriver(negotiation.driverId, orderId);
+
+    // 4. Close Negotiation Session
+    await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
+
+    // 5. Log Analytics Asynchronously (non-critical — does not block flow)
+    const order = await OrderRepository.findById(orderId);
+    AnalyticsService.logNegotiationEvent(
+      orderId,
+      sessionId,
+      negotiation.driverId,
+      roundCount,
+      "accepted",
+      finalPrice,
+      order?.fareEstimate
+    ).catch(err => logger.warn({ err }, "Analytics Log Failed (Non-Critical)."));
+
+    return { orderId, finalPrice };
   }
 
-  // Handle Negotiation Termination (failure/reject/expire) With Analytics
+  // Handle Negotiation Termination (failure/reject/expire) With Analytics (No Transactions)
   async failNegotiation(sessionId, reason) {
-    const dbSession = client.startSession();
-    try {
-      let result = null;
+    const negotiation = await NegotiationRepository.findById(sessionId);
+    if (!negotiation || negotiation.status !== "active") return;
 
-      await dbSession.withTransaction(async () => {
-        const negotiation = await NegotiationRepository.findById(sessionId);
-        if (!negotiation || negotiation.status !== "active") return;
+    // 1. Mark Session As Ended
+    const outcome = reason === "no_response_timeout" ? "expired_timeout" : "rejected";
+    await NegotiationRepository.updateStatus(sessionId, outcome, { endedReason: reason });
 
-        // 1. Mark Session As Ended (rejected/expired)
-        const outcome = reason === "no_response_timeout" ? "expired_timeout" : "rejected";
-        await NegotiationRepository.updateStatus(sessionId, outcome, { endedReason: reason }, { session: dbSession });
+    // 2. Clear Driver Lock
+    await PartnerRepository.unlockFromNegotiation(negotiation.driverId);
 
-        // 2. Clear Driver Lock
-        await PartnerRepository.unlockFromNegotiation(negotiation.driverId, { session: dbSession });
+    // 3. Reset Order State And Record Attempt
+    await OrderRepository.recordNegotiationAttempt(negotiation.orderId, negotiation.driverId);
 
-        // 3. Reset Order State & Record Attempt To Cooldown
-        await OrderRepository.recordNegotiationAttempt(negotiation.orderId, negotiation.driverId, { session: dbSession });
+    // 4. Log Analytics Asynchronously (non-critical)
+    AnalyticsService.logNegotiationEvent(
+      negotiation.orderId,
+      sessionId,
+      negotiation.driverId,
+      negotiation.messages.length,
+      outcome
+    ).catch(err => logger.warn({ err }, "Analytics Log Failed (Non-Critical)."));
 
-        // Terminal Analytics Log (single Source Of Truth)
-        await AnalyticsService.logNegotiationEvent(
-          negotiation.orderId,
-          sessionId,
-          negotiation.driverId,
-          negotiation.messages.length, // Derived Round Count
-          outcome
-        );
-
-        result = { orderId: negotiation.orderId, userId: negotiation.userId, driverId: negotiation.driverId };
-      });
-
-      return result;
-    } finally {
-      await dbSession.endSession();
-    }
+    return { orderId: negotiation.orderId, userId: negotiation.userId, driverId: negotiation.driverId };
   }
 
   // Retrieve Full Bidding Transcript For Auditing (admins)
