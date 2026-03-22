@@ -97,13 +97,7 @@ class OrderService {
       drivers = await collection.aggregate(buildDiscoveryPipeline([])).toArray();
     }
 
-    // 6. Enrich Candidates With Social Proof (completed Order Counts)
-    const enrichedDrivers = await Promise.all(drivers.map(async (driver) => {
-      const completedCount = await OrderRepository.countCompletedByPartnerId(driver.userId.toString());
-      return { ...driver, completedOrderCount: completedCount };
-    }));
-
-    return { pricingMetadata, drivers: enrichedDrivers };
+    return { pricingMetadata, drivers };
   }
 
   // Create A New Order In Pending State For User Discovery
