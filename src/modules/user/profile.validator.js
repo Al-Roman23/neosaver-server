@@ -7,22 +7,22 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function validateProfileUpdate(data) {
   const { name, email, phone, address, createdAt } = data;
 
-  // Prevent Createdat Updating
+  // This Prevents Modification Of The CreatedAt Field
   if (createdAt) {
     throw new BadRequest("CreatedAt Field Cannot Be Modified!");
   }
 
-  // Ensure At Least One Field Is Provided For Update
+  // This Ensures At Least One Field Is Provided For Update
   if (!name && !email && !phone && !address) {
     throw new BadRequest("At Least One Field Must Be Provided To Update!");
   }
 
-  // Validate Email Format If Provided
+  // This Validates The Email Format If Provided
   if (email && !EMAIL_REGEX.test(email)) {
     throw new BadRequest("Invalid Email Format!");
   }
 
-  // Validate Bangladeshi Phone Format If Provided
+  // This Validates The Bangladeshi Phone Number Format If Provided
   if (phone && !BD_PHONE_REGEX.test(phone)) {
     throw new BadRequest("Phone Must Be A Valid Bangladeshi Number (+8801XXXXXXXXX)!");
   }

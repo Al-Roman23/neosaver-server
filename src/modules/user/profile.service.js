@@ -4,7 +4,7 @@ const { uploadImageToImgBB } = require("../../utils/imgbb");
 const { NotFound, Conflict } = require("../../core/errors/errors");
 
 class ProfileService {
-  // Logic To Fetch User Profile
+  // This Fetches The User Profile From The Database
   async getProfile(userId) {
     const user = await UserRepository.findById(userId);
     if (!user) throw new NotFound("User Not Found!");
@@ -20,41 +20,45 @@ class ProfileService {
     };
   }
 
-  // Logic To Handle Partial Field Updates
+  // This Handles Partial Updates Of User Profile Fields
   async updateProfile(userId, updateData) {
     const user = await UserRepository.findById(userId);
     if (!user) throw new NotFound("User Not Found!");
 
-    // If Email Or Phone Is Changing, We Need To Ensure Uniqueness
+    // This Ensures Email And Phone Uniqueness If They Are Being Updated
     if (updateData.email && updateData.email !== user.email) {
       const emailExists = await UserRepository.findByEmail(updateData.email);
-      if (emailExists) throw new Conflict("Email Address Is Already In Use By Another Account!");
+      if (emailExists) {
+        throw new Conflict("Email Address Is Already In Use By Another Account!");
+      }
     }
 
     if (updateData.phone && updateData.phone !== user.phone) {
       const phoneExists = await UserRepository.findByPhone(updateData.phone);
-      if (phoneExists) throw new Conflict("Phone Number Is Already In Use By Another Account!");
+      if (phoneExists) {
+        throw new Conflict("Phone Number Is Already In Use By Another Account!");
+      }
     }
 
-    // Process Partial Update To Db
+    // This Updates The User Profile Fields In The Database
     await UserRepository.updateById(userId, updateData);
 
-    // Return Complete Updated User Profile Using Our Existing Fetch Function
+    // This Returns The Fully Updated User Profile
     return await this.getProfile(userId);
   }
 
-  // Logic To Handle Imgbb Upload And Db Update Together
+  // This Handles Profile Image Upload And Database Update
   async uploadProfileImage(userId, fileBuffer, originalName) {
     const user = await UserRepository.findById(userId);
     if (!user) throw new NotFound("User Not Found!");
 
-    // Push To Imgbb Through Utility
+    // This Uploads The Image To Imgbb Using Utility Function
     const imageUrl = await uploadImageToImgBB(fileBuffer, originalName);
 
-    // Persist To Database
+    // This Saves The Image Url To The Database
     await UserRepository.updateById(userId, { profileImageUrl: imageUrl });
 
-    // Return The Updated Document Profile
+    // This Returns The Fully Updated User Profile
     return await this.getProfile(userId);
   }
 }

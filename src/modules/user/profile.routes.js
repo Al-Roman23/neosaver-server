@@ -6,15 +6,11 @@ const ProfileController = require("./profile.controller");
 const { verifyAuthToken } = require("../../middlewares/verifyAuthToken");
 const { BadRequest } = require("../../core/errors/errors");
 
-// Configure Multer To Store File Buffers In Memory
+// This Configures Multer To Store File Buffers In Memory
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB Limit
+  limits: { fileSize: 5 * 1024 * 1024 }, // This Sets The Maximum File Size Limit To 5 MB
   fileFilter: (req, file, cb) => {
-    // Debug Log To Identify Non-standard Mime Types Sent By Frontend
-    const logger = require("../../utils/logger");
-    logger.info({ mimetype: file.mimetype, filename: file.originalname }, "Processing User Profile Image Filter.");
-
     const isImageMime = file.mimetype.startsWith("image/");
     const isImageExt = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.originalname);
 
@@ -26,16 +22,16 @@ const upload = multer({
   },
 });
 
-// All Routes Below Require Valid Jwt Authentication
+// This Applies Authentication Middleware To All Routes Below
 router.use(verifyAuthToken);
 
-// Fetch Current User Profile
+// This Fetches The Current User Profile
 router.get("/profile", ProfileController.getProfile);
 
-// Partially Update User Profile Fields
+// This Updates User Profile Fields Partially
 router.put("/profile", ProfileController.updateProfile);
 
-// Upload And Replace Profile Image Via Imgbb
+// This Uploads And Replaces The User Profile Image Via Imgbb
 router.post("/profile/image", upload.single("image"), ProfileController.uploadProfileImage);
 
 module.exports = router;

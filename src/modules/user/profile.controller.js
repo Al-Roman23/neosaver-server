@@ -4,7 +4,7 @@ const { validateProfileUpdate } = require("./profile.validator");
 const { BadRequest } = require("../../core/errors/errors");
 
 class ProfileController {
-  // Http Fetch Profile
+  // This Handles The HTTP Request To Fetch The User Profile
   async getProfile(req, res, next) {
     try {
       const userId = req.user.id;
@@ -19,13 +19,13 @@ class ProfileController {
     }
   }
 
-  // Http Update Profile Fields
+  // This Handles The HTTP Request To Update User Profile Fields
   async updateProfile(req, res, next) {
     try {
       const userId = req.user.id;
       const updateData = req.body;
 
-      // Validate Incoming Payload
+      // This Validates The Incoming Profile Update Payload
       validateProfileUpdate(updateData);
 
       const updatedProfile = await ProfileService.updateProfile(userId, updateData);
@@ -40,11 +40,11 @@ class ProfileController {
     }
   }
 
-  // Http Upload Image To Imgbb And Set Url
+  // This Handles The HTTP Request To Upload And Update Profile Image
   async uploadProfileImage(req, res, next) {
     try {
       const userId = req.user.id;
-      const file = req.file; // Provided By Multer
+      const file = req.file; // This File Is Provided By Multer Middleware
 
       if (!file) {
         throw new BadRequest("No File Provided For Upload!");

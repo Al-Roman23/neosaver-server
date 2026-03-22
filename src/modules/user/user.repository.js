@@ -3,7 +3,7 @@ const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 
 class UserRepository {
-  // Insert A New User Document
+  // This Inserts A New User Document Into The Database
   async createUser(userData) {
     const usersCollection = await getCollection("users");
     return usersCollection.insertOne({
@@ -13,19 +13,19 @@ class UserRepository {
     });
   }
 
-  // Find User By Email Address
+  // This Finds A User By Email Address
   async findByEmail(email) {
     const usersCollection = await getCollection("users");
     return usersCollection.findOne({ email });
   }
 
-  // Find User By Phone Number
+  // This Finds A User By Phone Number
   async findByPhone(phone) {
     const usersCollection = await getCollection("users");
     return usersCollection.findOne({ phone });
   }
 
-  // Find User By Email Or Phone -> For Login
+  // This Finds A User By Email Or Phone Number For Login
   async findByEmailOrPhone(email, phone) {
     const usersCollection = await getCollection("users");
     return usersCollection.findOne({
@@ -33,13 +33,13 @@ class UserRepository {
     });
   }
 
-  // Find User By Id
+  // This Finds A User By Unique Identifier
   async findById(id) {
     const usersCollection = await getCollection("users");
     return usersCollection.findOne({ _id: new ObjectId(id) });
   }
 
-  // Update User Fields By Id
+  // This Updates User Fields By Unique Identifier
   async updateById(id, updateData) {
     const usersCollection = await getCollection("users");
     return usersCollection.updateOne(
@@ -48,7 +48,7 @@ class UserRepository {
     );
   }
 
-  // Update User Password By Email -> Also Sets Password Changed At For Token Invalidation
+  // This Updates The User Password And Sets Password Changed Timestamp
   async updatePasswordByEmail(email, hashedPassword) {
     const usersCollection = await getCollection("users");
     return usersCollection.updateOne(
@@ -62,7 +62,6 @@ class UserRepository {
       }
     );
   }
-
 }
 
 module.exports = new UserRepository();
