@@ -64,7 +64,7 @@ class NegotiationService {
           userId,
           driverId,
           messages: [],
-          expiresAt: new Date(Date.now() + 60000), // 60s To Respond
+          expiresAt: new Date(Date.now() + 99000), // 99s To Respond
         }, { session });
 
         // 3. Atomically Link Negotiation To Order

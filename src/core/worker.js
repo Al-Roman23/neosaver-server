@@ -10,7 +10,7 @@ class BackgroundWorker {
     this.reconciliationInterval = null;
   }
 
-  // Start The 30-second Heartbeat Reconciliation Job
+  // Start The 30-Second Heartbeat Reconciliation Job
   start() {
     logger.info("Starting Global Reconciliation Heartbeat (30s)...");
     this.reconciliationInterval = setInterval(() => {
@@ -55,22 +55,22 @@ class BackgroundWorker {
     try {
       const { getCollection } = require("../config/db");
       const partnersCollection = await getCollection("partners");
-      
-      const staleThreshold = new Date(Date.now() - 10 * 60 * 1000); // 10 Minutes Dead Man Switch
+
+      const staleThreshold = new Date(Date.now() - 59 * 60 * 1000); // 59 Minutes Dead Man Switch
       const result = await partnersCollection.updateMany(
-        { 
+        {
           $or: [
             { isOnline: true },
             { isAppInBackground: true }
           ],
           lastAppHeartbeatAt: { $lt: staleThreshold }
         },
-        { 
-          $set: { 
-            isOnline: false, 
-            isAppInBackground: false, 
-            updatedAt: new Date() 
-          } 
+        {
+          $set: {
+            isOnline: false,
+            isAppInBackground: false,
+            updatedAt: new Date()
+          }
         }
       );
 
@@ -93,6 +93,8 @@ class BackgroundWorker {
   // Task: Handle Expired Negotiation Sessions
   async reconcileExpiredSessions(now) {
     const negotiationCollection = await getCollection("negotiation_sessions");
+
+    // Find Sessions That Are Stuck On "active" But Their Timer Ran Out
     const expiredSessions = await negotiationCollection
       .find({ status: "active", expiresAt: { $lt: now } })
       .toArray();
@@ -101,18 +103,18 @@ class BackgroundWorker {
       logger.info({ count: expiredSessions.length }, "Cleaning Up Expired Negotiation Sessions...");
 
       await Promise.allSettled(expiredSessions.map(async (session) => {
-        // Mark Session As Expired In Db
+        // Step A: Mark The Session As Expired In The Database
         await NegotiationRepository.updateStatus(session._id, "expired_timeout", {
           endedReason: "no_response_timeout"
         });
 
-        // Unlock Participant Driver
+        // Step B: Unlock The Driver
         await PartnerRepository.unlockFromNegotiation(session.driverId);
 
-        // Reset Order Document For User Discovery
+        // Step C: Reset Order Document For User Discovery
         await OrderRepository.recordNegotiationAttempt(session.orderId, session.driverId);
 
-        // Notify Participant Sockets
+        // Step D: Notify Participant Sockets
         const socketService = require("./socket");
         socketService.sendToUser(session.userId.toString(), "negotiation_expired", {
           orderId: session.orderId,
@@ -128,8 +130,12 @@ class BackgroundWorker {
 
   // Task: Auto-cancel "ghost" Trips (arrived But No Movement For 15m)
   async reconcileGhostTrips() {
+    // Step A: Calculate The Time Limit (15 Minutes Ago)
     const ghostTimeLimit = new Date(Date.now() - 15 * 60 * 1000);
+
     const ordersCollection = await getCollection("orders");
+
+    // Step B: Find Orders That Are Stuck On "arrived" But Their Timer Ran Out
     const ghostOrders = await ordersCollection
       .find({ status: "arrived", updatedAt: { $lt: ghostTimeLimit } })
       .toArray();
@@ -137,10 +143,13 @@ class BackgroundWorker {
     if (ghostOrders.length > 0) {
       logger.warn({ count: ghostOrders.length }, "System Cancelling Inactive 'Arrived' Orders (Ghost Trips)...");
       await Promise.allSettled(ghostOrders.map(async (order) => {
+        // Step C: Update Order Status To Cancelled
         await OrderRepository.updateStatus(order._id, "cancelled_system", {
           cancelledAt: new Date(),
           penaltyFlag: true
         });
+
+        // Step D: Unlock The Driver But With The Penalty Flag
         await PartnerRepository.unlockDriver(order.partnerId.toString());
       }));
     }
