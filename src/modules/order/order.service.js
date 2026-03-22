@@ -99,7 +99,7 @@ class OrderService {
 
     // 6. Enrich Candidates With Social Proof (completed Order Counts)
     const enrichedDrivers = await Promise.all(drivers.map(async (driver) => {
-      const completedCount = await OrderRepository.countCompletedByPartnerId(driver._id.toString());
+      const completedCount = await OrderRepository.countCompletedByPartnerId(driver.userId.toString());
       return { ...driver, completedOrderCount: completedCount };
     }));
 

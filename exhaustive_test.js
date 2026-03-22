@@ -2,8 +2,8 @@
 const io = require("socket.io-client");
 const axios = require("axios");
 
-const BASE_URL = "http://localhost:5000/v1/api";
-const SOCKET_URL = "http://localhost:5000";
+const BASE_URL = "https://neosaver-server.onrender.com/v1/api";
+const SOCKET_URL = "https://neosaver-server.onrender.com";
 
 async function runTest() {
   console.log("🚀 STARTING NEOSAVER CORE ENGINE: FINAL EXHAUSTIVE TEST...");
@@ -110,7 +110,7 @@ async function runTest() {
     } else {
       throw new Error("Discovery Error: Background Driver Wrongfully Hidden!");
     }
-    
+
     // Resume Normal State For Continuation
     dSocket.emit("app_state_change", { state: "foreground" });
 
