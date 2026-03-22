@@ -69,6 +69,11 @@ class PartnerService {
       throw new NotFound("User Record Could Not Be Found!");
     }
 
+    // [TEMPORARY HACK FOR FRONTEND TESTING] Return Null If Partner Doesn't Exist Yet
+    if (!partner) {
+      return null;
+    }
+
     // Assemble The Required Output Structure With Null-Safety For Un-Onboarded Partners
     return {
       personalInfo: {
