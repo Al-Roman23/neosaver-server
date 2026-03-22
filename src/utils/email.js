@@ -2,33 +2,25 @@
 const nodemailer = require("nodemailer");
 const logger = require("./logger");
 
-// This Creates A Reusable Email Transporter Using SMTP Configuration
+// Create Reusable Transporter Using Gmail Smtp
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // Use STARTTLS For Port 587
+  service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  // This Forces The Connection To Use IPv4 And Avoids Networking Timeouts
-  connectionTimeout: 10000,
-  family: 4
 });
 
-// This Verifies The Transporter Connection Silently On Startup To Prevent Crashes
+// Verify Transporter Connection On Startup
 transporter.verify((error) => {
   if (error) {
-    logger.warn("Email Transporter Is Offline. Forgot To Set App Password? Registration/Reset Emails Will Fail.");
-  } else {
-    logger.info("Email Transporter Ready.");
+    logger.error({ error }, "Email Transporter Connection Failed!");
   }
 });
 
 // Send Password Reset Email
 async function sendPasswordResetEmail(toEmail, resetToken) {
   const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
-
   const mailOptions = {
     from: `"Neo Saver" <${process.env.EMAIL_USER}>`,
     to: toEmail,
