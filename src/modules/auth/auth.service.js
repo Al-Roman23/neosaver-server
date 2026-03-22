@@ -192,12 +192,10 @@ class AuthService {
     // Save Token To Database -> Ttl Index Will Auto-expire After 1 Hour
     await AuthRepository.saveResetToken(normalizedEmail, resetToken);
 
-    // Wrap Email Send In Try/catch To Preserve Anonymity Guarantee
-    try {
-      await sendPasswordResetEmail(normalizedEmail, resetToken);
-    } catch (err) {
+    // This Triggers The Email Send In The Background To Ensure Instant Api Response
+    sendPasswordResetEmail(normalizedEmail, resetToken).catch((err) => {
       logger.error({ err }, "Password Reset Email Failed To Send Silently!");
-    }
+    });
   }
 
   async resetPassword(token, newPassword) {
