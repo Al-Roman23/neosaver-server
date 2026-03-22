@@ -1,6 +1,10 @@
 const OrderRepository = require("./order.repository");
 const PartnerRepository = require("../partner/partner.repository");
 const AnalyticsService = require("../analytics/analytics.service");
+const NegotiationService = require("../negotiation/negotiation.service");
+const UserRepository = require("../user/user.repository");
+const NegotiationRepository = require("../negotiation/negotiation.repository");
+const socketService = require("../../core/socket");
 const { getCollection, client } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { BadRequest, Conflict, NotFound } = require("../../core/errors/errors");
@@ -16,17 +20,14 @@ const acceptanceResolvers = new Map();
 class OrderService {
   // Manual Discovery Phase: Find Nearby Drivers & Aggregated Surge Data
   async fetchNearbyForDiscovery(pickupLng, pickupLat, userId) {
-    const NegotiationService = require("../negotiation/negotiation.service");
-
     // Ensure Numeric Coordinates For Precision Matching
     const lng = parseFloat(pickupLng);
     const lat = parseFloat(pickupLat);
 
-    // 1. Calculate Surge Meta-data (scarcity-based)
-    const pricingMetadata = await NegotiationService.calculateSuggestedFare(lng, lat, 10); // Approx 10km Trip
+    // 1. Calculate Surge Meta-data (Scarcity-based)
+    const pricingMetadata = await NegotiationService.calculateSuggestedFare(lng, lat, 25); // Approx 25km Trip
 
     // 2. Identify Blocked Drivers (1-minute Cooldown For Re-discovery)
-    const OrderRepository = require("./order.repository");
     const activeOrder = await OrderRepository.findActiveByUserId(userId);
     let blockedDriverIds = [];
 
@@ -38,7 +39,7 @@ class OrderService {
         .map(d => new ObjectId(d.driverId));
     }
 
-    // 3. Discovery Pipeline Factory (geonear + Match Filters)
+    // 3. Discovery Pipeline Factory (GeoNear + Match Filters)
     const buildDiscoveryPipeline = (excludeIds = []) => {
       const pipeline = [
         {
@@ -89,10 +90,10 @@ class OrderService {
 
     const collection = await getCollection("partners");
 
-    // 4. Step A: Filtered Discovery (respect Cooldown)
+    // 4. Step A: Filtered Discovery (Respect Cooldown)
     let drivers = await collection.aggregate(buildDiscoveryPipeline(blockedDriverIds)).toArray();
 
-    // 5. Step B: Fallback Discovery (ignore Cooldown If Empty Results To Maintain Ux)
+    // 5. Step B: Fallback Discovery (Ignore Cooldown If Empty Results To Maintain Ux)
     if (drivers.length === 0) {
       drivers = await collection.aggregate(buildDiscoveryPipeline([])).toArray();
     }
@@ -106,7 +107,7 @@ class OrderService {
       throw new BadRequest("Pickup And Destination Coordinates Are Required!");
     }
 
-    // Check For Active Order Conflict (including Negotiating)
+    // Check For Active Order Conflict (Including Negotiating)
     const existingOrder = await OrderRepository.findActiveByUserId(userId);
     if (existingOrder) {
       throw new Conflict("You Already Have An Active Order!");
@@ -137,7 +138,7 @@ class OrderService {
     return order;
   }
 
-  // User Or Driver Cancels An Order (supports Granular Penalty Logic)
+  // User Or Driver Cancels An Order (Supports Granular Penalty Logic)
   async cancelOrder(orderId, userId, cancelBy = "user") {
     const dbSession = client.startSession();
     try {
@@ -180,7 +181,6 @@ class OrderService {
 
         if (driverToUnlock) {
           await PartnerRepository.unlockDriver(driverToUnlock, { session: dbSession });
-          const socketService = require("../../core/socket");
           socketService.io.to("driver_" + driverToUnlock).emit("order_cancelled", { orderId, by: cancelBy });
           socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
         }
@@ -197,17 +197,14 @@ class OrderService {
     }
   }
 
-  // Get Detailed Information For A Single Order (includes Non-sensitive User Profile)
+  // Get Detailed Information For A Single Order (Includes Non-sensitive User Profile)
   async getOrderDetails(orderId, requestUserId, requestUserRole) {
-    const UserRepository = require("../user/user.repository");
-    const NegotiationRepository = require("../negotiation/negotiation.repository");
-
     const order = await OrderRepository.findById(orderId);
     if (!order) {
       throw new NotFound("Order Not Found!");
     }
 
-    // Role-based Access Control Registry (stringify Ids For Strict Comparison)
+    // Role-based Access Control Registry (Stringify Ids For Strict Comparison)
     const normalizedReqId = requestUserId.toString();
     const isUser = order.userId.toString() === normalizedReqId;
     const isDriver = order.partnerId && order.partnerId.toString() === normalizedReqId;
@@ -227,10 +224,10 @@ class OrderService {
       throw new BadRequest("Access Denied: You Are Not A Participant Of This Order.");
     }
 
-    // Join Limited User Profile (safety: Name Only Before Trip Accepted)
+    // Join Limited User Profile (Safety: Name Only Before Trip Accepted)
     const user = await UserRepository.findById(order.userId);
 
-    // Join Partner Details If Assigned (transparency Post-acceptance)
+    // Join Partner Details If Assigned (Transparency Post-acceptance)
     let partner = null;
     if (order.partnerId && ["accepted", "arrived", "pickup_started", "to_destination", "completed"].includes(order.status)) {
       const partnerData = await PartnerRepository.findByUserId(order.partnerId.toString());
@@ -265,7 +262,6 @@ class OrderService {
 
     // Fetch Full Record To Extract User Id And Otp For Notification
     const order = await OrderRepository.findById(orderId);
-    const socketService = require("../../core/socket");
 
     // Broadcast Status Update To Trip Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "arrived" });
@@ -298,7 +294,6 @@ class OrderService {
       pickupStartedAt: new Date(),
     });
 
-    const socketService = require("../../core/socket");
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "pickup_started" });
     return updated;
   }
@@ -317,7 +312,6 @@ class OrderService {
 
     await PartnerRepository.unlockDriver(partnerId);
     await PartnerRepository.incrementTrips(partnerId); // Synchronize Static Trip Counter
-    const socketService = require("../../core/socket");
 
     // Broadcast Status Update To Trip Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "completed" });
@@ -350,7 +344,6 @@ class OrderService {
 
   // Get Past Trip History For Driver (Includes Populated User/Patient Details)
   async getOrderHistoryByPartner(partnerId, status) {
-    const UserRepository = require("../user/user.repository");
     const orders = await OrderRepository.findHistoryByPartnerId(partnerId, status);
 
     // Map Over Orders To Inject Limited User Profile Data For The History View

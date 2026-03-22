@@ -4,7 +4,8 @@ const OrderRepository = require("../order/order.repository");
 const PartnerRepository = require("../partner/partner.repository");
 const AnalyticsService = require("../analytics/analytics.service");
 const { getCollection, client } = require("../../config/db");
-const { Conflict } = require("../../core/errors/errors");
+const { ObjectId } = require("mongodb");
+const { Conflict, NotFound } = require("../../core/errors/errors");
 const logger = require("../../utils/logger");
 
 class NegotiationService {
@@ -98,7 +99,7 @@ class NegotiationService {
 
         // 2. Transactional Order Status Update (guarded By Occ)
         const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, negotiation.driverId, "negotiating", "accepted", {
-          partnerId: new (require("mongodb")).ObjectId(negotiation.driverId),
+          partnerId: new ObjectId(negotiation.driverId),
           acceptedAt: new Date(),
           finalFare: finalPrice
         }, { session: dbSession });
@@ -188,7 +189,7 @@ class NegotiationService {
     }
 
     if (!session) {
-      throw new (require("../../core/errors/errors")).NotFound("No Bidding Cycle Found For This Order!");
+      throw new NotFound("No Bidding Cycle Found For This Order!");
     }
     return session;
   }

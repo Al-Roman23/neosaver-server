@@ -1,16 +1,17 @@
 // This File Handles The Order Controller
 const OrderService = require("./order.service");
+const { BadRequest } = require("../../core/errors/errors");
 
 class OrderController {
   // Create A New Ambulance Order Request
   async createOrder(req, res, next) {
     try {
       const userId = req.user.id;
-      const { 
-        pickupLng, pickupLat, 
-        destinationLng, destinationLat, 
+      const {
+        pickupLng, pickupLat,
+        destinationLng, destinationLat,
         pickupLocation, destinationLocation,
-        notes, fareEstimate, partnerId, ambulanceType 
+        notes, fareEstimate, partnerId, ambulanceType
       } = req.body;
 
       // Extract Coordinates From Either Top-Level Or Nested Payload
@@ -72,7 +73,7 @@ class OrderController {
   async getNearbyDrivers(req, res, next) {
     try {
       const { pickupLng, pickupLat } = req.query;
-      if (!pickupLng || !pickupLat) throw new require("../../core/errors/errors").BadRequest("Coordinates Required!");
+      if (!pickupLng || !pickupLat) throw new BadRequest("Coordinates Required!");
 
       const data = await OrderService.fetchNearbyForDiscovery(pickupLng, pickupLat, req.user.id);
       res.status(200).json({ success: true, data });
@@ -125,7 +126,7 @@ class OrderController {
       const { id: orderId } = req.params;
       const { otp } = req.body;
 
-      if (!otp) throw new require("../../core/errors/errors").BadRequest("OTP Verification Code Required!");
+      if (!otp) throw new BadRequest("OTP Verification Code Required!");
 
       const order = await OrderService.startTripWithOTP(orderId, partnerId, otp);
 

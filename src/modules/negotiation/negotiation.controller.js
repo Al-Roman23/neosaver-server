@@ -1,5 +1,6 @@
 // This File Handles The Negotiation Controller Logic
 const NegotiationService = require("./negotiation.service");
+const { BadRequest } = require("../../core/errors/errors");
 
 class NegotiationController {
   // Rest Endpoint To Initiate A Negotiation (handshake)
@@ -9,7 +10,7 @@ class NegotiationController {
       const { orderId, driverId, version } = req.body;
 
       if (!orderId || !driverId) {
-        throw new (require("../../core/errors/errors")).BadRequest("Missing Required Negotiation Fields!");
+        throw new BadRequest("Missing Required Negotiation Fields!");
       }
 
       const session = await NegotiationService.initiate(userId, {

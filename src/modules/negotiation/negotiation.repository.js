@@ -40,7 +40,7 @@ class NegotiationRepository {
       {
         _id: new ObjectId(sessionId),
         status: "active",
-        currentRound: { $lt: 6 }, // 6 messages = EXACTLY 3 full rounds (Driver x3 + User x3)
+        currentRound: { $lt: 6 }, // 6 messages = EXACTLY 3 Full Rounds (Driver x3 + User x3)
         // Enforce Sequence Integrity At Db Level
         lastSequence: { $lt: message.sequence }
       },
@@ -75,7 +75,7 @@ class NegotiationRepository {
     );
   }
 
-  // Find Any Negotiation Session By Order Id (for History/analytics)
+  // Find Any Negotiation Session By Order Id (for History/Analytics)
   async findByOrderId(orderId) {
     const collection = await getCollection("negotiation_sessions");
     return collection.findOne({ orderId: new ObjectId(orderId) });
