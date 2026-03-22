@@ -78,6 +78,7 @@ class PartnerService {
         phone: user.phone,
         address: user.address,
         role: user.role,
+        profileImageUrl: user.profileImageUrl,
         createdAt: user.createdAt,
       },
       partnerInfo: partner ? {
