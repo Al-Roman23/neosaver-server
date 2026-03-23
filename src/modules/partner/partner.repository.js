@@ -9,7 +9,7 @@ class PartnerRepository {
     return partnersCollection.insertOne({
       ...partnerData,
       isVerified: true, // Security: Driver Must Be Manually Approved To Be Queried
-      isNegotiating: false, // Core: Always Initialize As False To Prevent Missing Field Issues
+      isNegotiating: false, // Core: Always Initialize As False
       negotiationLockExpiresAt: null,
       isAppInBackground: false, // Core: Manage Background Grace Period
       lastAppHeartbeatAt: new Date(), // Core: Dead Man's Switch Pulse
@@ -81,7 +81,7 @@ class PartnerRepository {
     );
   }
 
-  // Atomically Lock Driver For A Negotiation Session (prevents Double-negotiation)
+  // Atomically Lock Driver For A Negotiation Session (Prevents Double-negotiation)
   async lockForNegotiation(userId, timeoutMs = 60000, options = {}) {
     const partnersCollection = await getCollection("partners");
     const expiresAt = new Date(Date.now() + timeoutMs);
@@ -120,7 +120,7 @@ class PartnerRepository {
     );
   }
 
-  // Clear Stale Negotiation Locks (called By Background Worker)
+  // Clear Stale Negotiation Locks (Called By Background Worker)
   async clearStaleLocks(options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateMany(
@@ -139,7 +139,7 @@ class PartnerRepository {
     );
   }
 
-  // Atomically Lock Driver To An Order (prevents Double-booking)
+  // Atomically Lock Driver To An Order (Prevents Double-booking)
   async lockDriver(userId, orderId, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(

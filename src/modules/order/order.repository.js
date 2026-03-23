@@ -46,7 +46,7 @@ class OrderRepository {
     );
   }
 
-  // Record A Failed Negotiation Attempt To Prevent Instant Spam (refined For Retry Cooldown)
+  // Record A Failed Negotiation Attempt To Prevent Instant Spam (Refined For Retry Cooldown)
   async recordNegotiationAttempt(orderId, partnerId, options = {}) {
     const ordersCollection = await getCollection("orders");
     const driverObjectId = new ObjectId(partnerId);
@@ -94,7 +94,7 @@ class OrderRepository {
     return updateResult;
   }
 
-  // Update Driver Location (live Re-sync Safety)
+  // Update Driver Location (Live Re-sync Safety)
   async updateDriverLocation(orderId, lng, lat) {
     const ordersCollection = await getCollection("orders");
     return ordersCollection.updateOne(
@@ -111,7 +111,7 @@ class OrderRepository {
     );
   }
 
-  // Update Status With Full Guard Stack (role, Status, Version)
+  // Update Status With Full Guard Stack (Role, Status, Version)
   async updateStatusWithGuard(orderId, partnerId, expectedStatus, newStatus, extraFields = {}, options = {}) {
     const ordersCollection = await getCollection("orders");
 
@@ -121,7 +121,7 @@ class OrderRepository {
       status: Array.isArray(expectedStatus) ? { $in: expectedStatus } : expectedStatus
     };
 
-    // Only Enforce Partnerid If Already Assigned (states Post-negotiation)
+    // Only Enforce Partnerid If Already Assigned (States Post-negotiation)
     const assignedStates = ["accepted", "arrived", "pickup_started", "to_destination"];
     const isAssigned = Array.isArray(expectedStatus)
       ? expectedStatus.some(s => assignedStates.includes(s))
@@ -158,7 +158,7 @@ class OrderRepository {
     );
   }
 
-  // Get User's Active Order (supports Negotiating State)
+  // Get User's Active Order (Supports Negotiating State)
   async findActiveByUserId(userId) {
     const ordersCollection = await getCollection("orders");
     const activeStatuses = ["pending", "negotiating", "accepted", "arrived", "pickup_started", "to_destination"];
@@ -168,7 +168,7 @@ class OrderRepository {
     });
   }
 
-  // History And History By Driver Remain Same (standard Sort, Optional Filtering)
+  // History And History By Driver Remain Same (Standard Sort, Optional Filtering)
   async findHistoryByUserId(userId, statusFilter = null) {
     const ordersCollection = await getCollection("orders");
     const query = { userId: new ObjectId(userId) };

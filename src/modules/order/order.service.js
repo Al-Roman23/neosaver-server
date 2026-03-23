@@ -255,7 +255,7 @@ class OrderService {
     // Broadcast Status Update To Trip Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "arrived" });
 
-    // Proactively Push Specific Arrival Notification To User (with Otp)
+    // Proactively Push Specific Arrival Notification To User (With Otp)
     socketService.sendToUser(order.userId.toString(), "driver_arrived", {
       message: "Your Driver Has Arrived! Provide The OTP To Start Trip Safely.",
       otp: order.otp.code,

@@ -20,7 +20,7 @@ class PartnerController {
     }
   }
 
-  // Get Unified Partner Profile (users + Partners Data)
+  // Get Unified Partner Profile (users + partners Data)
   async getProfile(req, res, next) {
     try {
       const userId = req.user.id;
@@ -140,7 +140,7 @@ class PartnerController {
 
       res.status(200).json({
         success: true,
-        message: `Partner Verification Status Changed To ${isVerified}`,
+        message: `Partner Verification Status Changed To ${isVerified}!`,
       });
     } catch (error) {
       next(error);

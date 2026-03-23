@@ -56,7 +56,7 @@ class NegotiationRepository {
     );
   }
 
-  // Update Final Status And Close Session (with Re-entrancy Guard)
+  // Update Final Status And Close Session (With Re-entrancy Guard)
   async updateStatus(sessionId, status, extraFields = {}, options = {}) {
     const collection = await getCollection("negotiation_sessions");
     return collection.updateOne(
@@ -75,7 +75,7 @@ class NegotiationRepository {
     );
   }
 
-  // Find Any Negotiation Session By Order Id (for History/Analytics)
+  // Find Any Negotiation Session By Order Id (For History/Analytics)
   async findByOrderId(orderId) {
     const collection = await getCollection("negotiation_sessions");
     return collection.findOne({ orderId: new ObjectId(orderId) });

@@ -13,7 +13,7 @@ class NotificationController {
         throw new BadRequest("User ID, Event, And Data Are Required!");
       }
 
-      // Attempt To Send Instantly (will Queue If User Offline)
+      // Attempt To Send Instantly (Will Queue If User Offline)
       SocketService.sendToUser(userId, event, data);
 
       res.json({

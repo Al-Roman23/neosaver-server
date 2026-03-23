@@ -52,11 +52,11 @@ class SocketService {
         const { getCollection } = require("../config/db");
         const collection = await getCollection("nonces");
 
-        // Atomic Insert-if-not-exists (unique Constraint Handle)
+        // Atomic Insert-if-not-exists (Unique Constraint Handle)
         await collection.insertOne({ nonce, createdAt: new Date() });
         return true;
       } catch (err) {
-        // Duplicate Nonce Error (code 11000) Means Replay Detected
+        // Duplicate Nonce Error (Code 11000) Means Replay Detected
         return false;
       }
     };
@@ -72,7 +72,7 @@ class SocketService {
 
       logger.info({ userId, socketId: socket.id }, "User Online — Listening For Core Engine Events.");
 
-      // Update Last Socket Connection For Partners Natively (silently Drops For Non-partners)
+      // Update Last Socket Connection For Partners Natively (Silently Drops For Non-partners)
       PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => { });
 
       // Attempt To Deliver Any Pending Offline Notifications Asynchronously
@@ -99,14 +99,14 @@ class SocketService {
           if (partner.currentOrderId) {
             const orderId = partner.currentOrderId.toString();
 
-            // Sync Location To Order Document (reopen-app Safety)
+            // Sync Location To Order Document (Reopen-app Safety)
             await OrderRepository.updateDriverLocation(orderId, lng, lat);
 
-            // Broadcast Live Push To The Dedicated Order Room (with Distance Proximity Metadata)
+            // Broadcast Live Push To The Dedicated Order Room (With Distance Proximity Metadata)
             const order = await OrderRepository.findById(orderId);
             const pickup = order.pickupLocation.coordinates;
 
-            // Simple Spherical Earth Distance (approximate Meters)
+            // Simple Spherical Earth Distance (Approximate Meters)
             const R = 6371e3;
             const φ1 = lat * Math.PI / 180;
             const φ2 = pickup[1] * Math.PI / 180;
@@ -151,7 +151,7 @@ class SocketService {
             if (driverSocket) driverSocket.join("order_" + orderId);
           }
 
-          // Emit Negotiation Request To Driver (include Combined Payload For Latency Reduction)
+          // Emit Negotiation Request To Driver (Include Combined Payload For Latency Reduction)
           this.io.to("driver_" + driverId).emit("new_negotiation_request", {
             orderId,
             sessionId: session._id,
@@ -177,11 +177,11 @@ class SocketService {
           const session = await NegotiationRepository.findById(sessionId);
           if (!session || session.status !== "active") return ack({ success: false, message: "Session Inactive!" });
 
-          // Message Ordering Guarantee (sequence Check)
+          // Message Ordering Guarantee (Sequence Check)
           if (sequence <= (session.lastSequence || 0)) return ack({ success: false, message: "Out-of-Order Packet Trapped!" });
 
           if (action === "accept") {
-            // 1. Service-layer Atomic Completion (business Rules + Analytics)
+            // 1. Service-layer Atomic Completion (Business Rules + Analytics)
             await NegotiationService.completeNegotiation(sessionId, orderId);
 
             // 2. Synchronize Unified State To Room Participants
@@ -199,7 +199,7 @@ class SocketService {
             return ack({ success: true });
           }
 
-          // Add Message (target Document Has Status: 'active' And 'lastsequence' Guard)
+          // Add Message (Target Document Has Status: 'active' And 'lastsequence' Guard)
           const updatedSession = await NegotiationRepository.addMessage(sessionId, {
             sender: socket.userId.toString() === session.userId.toString() ? "user" : "driver",
             amount,

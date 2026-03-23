@@ -18,7 +18,7 @@ class PartnerService {
       throw new Conflict("You Have Already Submitted Your Partner Details!");
     }
 
-    // Check Uniqueness For Mission-critical Documents (nid & License)
+    // Check Uniqueness For Mission-critical Documents (NID & License)
     const partnersCollection = await getCollection("partners");
 
     const nidExists = await partnersCollection.findOne({ nationalId: details.nationalId });
@@ -69,7 +69,7 @@ class PartnerService {
       throw new NotFound("User Record Could Not Be Found!");
     }
 
-    // [TEMPORARY HACK FOR FRONTEND TESTING] Return Null If Partner Doesn't Exist Yet
+    // [TEMPORARY HACK FOR FRONTEND TESTING!] Return Null If Partner Doesn't Exist Yet
     if (!partner) {
       return null;
     }
@@ -123,7 +123,7 @@ class PartnerService {
       if (ALLOWED_PARTNER_FIELDS.includes(key)) partnerUpdates[key] = value;
     }
 
-    // Process Users Collection Update (including Unique Email/phone Check)
+    // Process Users Collection Update (Including Unique Email/Phone Check)
     if (Object.keys(userUpdates).length > 0) {
       const user = await UserRepository.findById(userId);
 
@@ -160,7 +160,7 @@ class PartnerService {
       throw new Conflict("Partner Record Could Not Be Found!");
     }
 
-    // Status Drives True Online/offline Maps Logic -> We Link Isavailable Automatically
+    // Status Drives True Online/Offline Maps Logic -> We Link IsAvailable Automatically
     const isAvailable = currentStatus === "online";
     const isOnline = currentStatus === "online";
     await PartnerRepository.updateByUserId(userId, { currentStatus, isAvailable, isOnline });

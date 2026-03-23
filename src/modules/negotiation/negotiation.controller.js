@@ -3,7 +3,7 @@ const NegotiationService = require("./negotiation.service");
 const { BadRequest } = require("../../core/errors/errors");
 
 class NegotiationController {
-  // Rest Endpoint To Initiate A Negotiation (handshake)
+  // Rest Endpoint To Initiate A Negotiation (Handshake)
   async initiate(req, res, next) {
     try {
       const userId = req.user.id;
