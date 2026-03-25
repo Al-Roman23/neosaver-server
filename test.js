@@ -20,7 +20,7 @@ const generateSecurity = () => ({ timestamp: Date.now(), nonce: Math.random().to
 // "c" = Driver Rejects On Their 3rd Bid -> Driver Walks Away Mid-round
 // "d" = User Rejects After Driver's 3rd Bid -> User Walks Away Mid-round
 // ==========================================
-const TEST_OPTION = "a"; // Change To "a", "b", "c", Or "d"
+const TEST_OPTION = "b"; // Change To "a", "b", "c", Or "d"
 
 // Helper: Expect A Request To Fail With A Specific Status Code
 async function expectFail(promise, expectedStatus, label) {

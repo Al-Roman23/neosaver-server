@@ -61,7 +61,7 @@ class NegotiationService {
         userId,
         driverId,
         messages: [],
-        expiresAt: new Date(Date.now() + 99000), // 99s To Respond
+        expiresAt: new Date(Date.now() + 29 * 60 * 1000), // 29 Minutes To Respond
       });
 
       // 3. Link Negotiation To Order (With OCC Version Guard)
