@@ -92,10 +92,6 @@ class NotificationService {
     if (legacyMap[type]) {
       socketService.io.to("user_" + userId).emit(legacyMap[type], payload);
     }
-
-    // Optional ACK Timeout (V2 Implementation Roadmap)
-    // For High Priority We Reset Status If No Client ACK In 5s
-    // To Simplify V1 We Leave It To Background Worker For Recovery
   }
 }
 
