@@ -26,13 +26,13 @@ class BackgroundWorker {
     const lockKey = "global_reconciliation_pulse";
 
     try {
-      // 1. Acquire Distributed Lock (atomic Insert)
+      // Acquire Distributed Lock (Atomic Insert)
       await lockCollection.insertOne({ lockKey, createdAt: new Date() });
 
       const now = new Date();
       logger.info("Executing Global Reconciliation Pulse (Distributed Lock Acquired)!");
 
-      // 2. Perform Parallel Reconciliation Tasks
+      // Perform Parallel Reconciliation Tasks
       await Promise.allSettled([
         this.clearStaleNegotiationLocks(),
         this.reconcileExpiredSessions(now),
@@ -103,18 +103,18 @@ class BackgroundWorker {
       logger.info({ count: expiredSessions.length }, "Cleaning Up Expired Negotiation Sessions...");
 
       await Promise.allSettled(expiredSessions.map(async (session) => {
-        // Step A: Mark The Session As Expired In The Database
+        // Mark The Session As Expired In The Database
         await NegotiationRepository.updateStatus(session._id, "expired_timeout", {
           endedReason: "no_response_timeout"
         });
 
-        // Step B: Unlock The Driver
+        // Unlock The Driver
         await PartnerRepository.unlockFromNegotiation(session.driverId);
 
-        // Step C: Reset Order Document For User Discovery
+        // Reset Order Document For User Discovery
         await OrderRepository.recordNegotiationAttempt(session.orderId, session.driverId);
 
-        // Step D: Notify Participant Sockets
+        // Notify Participant Sockets
         const socketService = require("./socket");
         socketService.sendToUser(session.userId.toString(), "negotiation_expired", {
           orderId: session.orderId,
@@ -130,12 +130,12 @@ class BackgroundWorker {
 
   // Task: Auto-cancel "ghost" Trips (arrived But No Movement For 15m)
   async reconcileGhostTrips() {
-    // Step A: Calculate The Time Limit (15 Minutes Ago)
+    // Calculate The Time Limit (15 Minutes Ago)
     const ghostTimeLimit = new Date(Date.now() - 15 * 60 * 1000);
 
     const ordersCollection = await getCollection("orders");
 
-    // Step B: Find Orders That Are Stuck On "arrived" But Their Timer Ran Out
+    // Find Orders That Are Stuck On Arrived But Their Timer Ran Out
     const ghostOrders = await ordersCollection
       .find({ status: "arrived", updatedAt: { $lt: ghostTimeLimit } })
       .toArray();
@@ -143,13 +143,13 @@ class BackgroundWorker {
     if (ghostOrders.length > 0) {
       logger.warn({ count: ghostOrders.length }, "System Cancelling Inactive 'Arrived' Orders (Ghost Trips)...");
       await Promise.allSettled(ghostOrders.map(async (order) => {
-        // Step C: Update Order Status To Cancelled
+        // Update Order Status To Cancelled
         await OrderRepository.updateStatus(order._id, "cancelled_system", {
           cancelledAt: new Date(),
           penaltyFlag: true
         });
 
-        // Step D: Unlock The Driver But With The Penalty Flag
+        // Unlock The Driver With Penalty Flag Applied
         await PartnerRepository.unlockDriver(order.partnerId.toString());
       }));
     }

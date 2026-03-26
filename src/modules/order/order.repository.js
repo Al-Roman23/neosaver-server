@@ -10,7 +10,7 @@ class OrderRepository {
       ...orderData,
       version: 1, // Initialize Optimistic Concurrency Control
       negotiationId: null,
-      attemptedDrivers: [], // Array Of { driverId: ObjectId, lastTriedAt: Date }
+      attemptedDrivers: [], // Array Of Attempted Driver Objects With Timestamps
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -121,7 +121,7 @@ class OrderRepository {
       status: Array.isArray(expectedStatus) ? { $in: expectedStatus } : expectedStatus
     };
 
-    // Only Enforce Partnerid If Already Assigned (States Post-negotiation)
+    // Only Enforce Partner Id If Already Assigned (States Post-Negotiation)
     const assignedStates = ["accepted", "arrived", "pickup_started", "to_destination"];
     const isAssigned = Array.isArray(expectedStatus)
       ? expectedStatus.some(s => assignedStates.includes(s))

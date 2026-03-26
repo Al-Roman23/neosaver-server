@@ -22,13 +22,13 @@ async function optionalAuth(req, res, next) {
     try {
       decoded = verifyToken(token);
     } catch (err) {
-      // If Token Is Invalid, We Don't Throw Error, Just Continue Without User
+      // If Token Is Invalid, We Don't Throw Error — Just Continue Without User
       // Note: This Might Be Changeable Based On Security Requirements
-      // But For Optional Auth, We Usually Just Ignore Invalid Tokens
+      // For Optional Auth We Usually Just Ignore Invalid Tokens
       return next();
     }
 
-    // Re-fetch User From Db For Fresh Role And Status
+    // Re-Fetch User From Db For Fresh Role And Status
     const user = await UserRepository.findById(decoded.id);
 
     // If User Exists And Is Active, Attach To Request

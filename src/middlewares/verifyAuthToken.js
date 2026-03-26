@@ -17,7 +17,7 @@ async function verifyAuthToken(req, res, next) {
     const token = header.split(" ")[1];
     const decoded = verifyToken(token);
 
-    // Re-fetch User From Db For Fresh Role And Status
+    // Re-Fetch User From Db For Fresh Role And Status
     const user = await UserRepository.findById(decoded.id);
 
     if (!user) {

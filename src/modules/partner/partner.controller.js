@@ -20,7 +20,7 @@ class PartnerController {
     }
   }
 
-  // Get Unified Partner Profile (users + partners Data)
+  // Get Unified Partner Profile (Users + Partners Data)
   async getProfile(req, res, next) {
     try {
       const userId = req.user.id;
@@ -71,7 +71,7 @@ class PartnerController {
     }
   }
 
-  // Handle Manual GPS Location Update Via HTTP API
+  // Handle Manual GPS Location Update Via Http Api
   async updateLocation(req, res, next) {
     try {
       const userId = req.user.id;
@@ -129,7 +129,7 @@ class PartnerController {
     }
   }
 
-  // Verify Partner Identity (admin Action)
+  // Verify Partner Identity (Admin Action)
   async verifyPartner(req, res, next) {
     try {
       const { id: partnerId } = req.params;

@@ -4,7 +4,7 @@ const { validateProfileUpdate } = require("./profile.validator");
 const { BadRequest } = require("../../core/errors/errors");
 
 class ProfileController {
-  // This Handles The HTTP Request To Fetch The User Profile
+  // This Handles The Http Request To Fetch The User Profile
   async getProfile(req, res, next) {
     try {
       const userId = req.user.id;
@@ -19,7 +19,7 @@ class ProfileController {
     }
   }
 
-  // This Handles The HTTP Request To Update User Profile Fields
+  // This Handles The Http Request To Update User Profile Fields
   async updateProfile(req, res, next) {
     try {
       const userId = req.user.id;
@@ -40,7 +40,7 @@ class ProfileController {
     }
   }
 
-  // This Handles The HTTP Request To Upload And Update Profile Image
+  // This Handles The Http Request To Upload And Update Profile Image
   async uploadProfileImage(req, res, next) {
     try {
       const userId = req.user.id;

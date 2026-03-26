@@ -28,6 +28,12 @@ A sophisticated bidding system that facilitates fair-market discovery:
 *   **Scarcity-Based Surge Pricing**: Automatically calculates suggested fares based on real-time driver density in the local area.
 *   **Re-discovery Cooldown**: Implements a "Cooldown Strategy" where recently-contacted drivers are hidden from discovery for 2 minutes — unless they are the only drivers nearby, maintaining a balance between user choice and driver variety.
 
+### 📱 4. "Zero-Change" Frontend Compatibility Layer
+To support legacy mobile applications (Flutter) without requiring forced app updates, the backend implements an **Elite Hardening Protocol**:
+*   **Universal Real-Time Enrichment**: All system-triggered sockets and REST responses dynamically "flatten" internal nested data (e.g., `pickup.lat`) into root-level legacy keys (e.g., `pickupLat`) before leaving the server.
+*   **Pre-emptive Security Bypass**: For automated system events (like a new driver ping), the engine temporarily bypasses strict participant authorization specifically to hydrate geographic data, ensuring the app UI receives distance metadata before the driver formally accepts the trip.
+*   **Payload Unwrapping**: The Notification Service actively detects legacy event types (like `NEGOTIATION_REQ`) and strips away modern payload wrappers, delivering raw, top-level data directly to older clients.
+
 ---
 
 ## 🔐 Security & Integrity Standard
@@ -81,5 +87,3 @@ The test covers four distinct scenarios including **Success paths**, **Max Round
 *Full-Stack Engineer | Systems Architect*  
 
 **"Architecting secure bridges between life-saving data and those who need it most."** — Built for the People's Republic of Bangladesh.
-
-📧 [alromanmolla@gmail.com](mailto:alromanmolla@gmail.com)  

@@ -122,7 +122,7 @@ class OrderController {
     }
   }
 
-  // Start Trip — Requires OTP Verification From User Device
+  // Start Trip — Requires Otp Verification From User Device
   async startTrip(req, res, next) {
     try {
       const partnerId = req.user.id;

@@ -70,21 +70,21 @@ async function startServer() {
     BackgroundWorker.start(); // Global Reconciliation Heartbeat
 
   } catch (error) {
-    logger.fatal({ error }, "Failed to start server!");
+    logger.fatal({ error }, "Failed To Start Server!");
     process.exit(1);
   }
 }
 
 // Graceful Shutdown Handler
 async function shutdown(signal) {
-  logger.info(`Received ${signal}. Closing server...`);
+  logger.info(`Received ${signal}. Closing Server...`);
 
   if (serverInstance) {
     serverInstance.close(async () => {
-      logger.info("HTTP server closed!");
+      logger.info("Http Server Closed!");
       BackgroundWorker.stop(); // Stop Background Processes
       await client.close();
-      logger.info("MongoDB connection closed!");
+      logger.info("Mongodb Connection Closed!");
       process.exit(0);
     });
   } else {

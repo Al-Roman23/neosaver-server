@@ -18,7 +18,7 @@ class PartnerService {
       throw new Conflict("You Have Already Submitted Your Partner Details!");
     }
 
-    // Check Uniqueness For Mission-critical Documents (NID & License)
+    // Check Uniqueness For Mission-Critical Documents (NID & License)
     const partnersCollection = await getCollection("partners");
 
     const nidExists = await partnersCollection.findOne({ nationalId: details.nationalId });
@@ -69,7 +69,7 @@ class PartnerService {
       throw new NotFound("User Record Could Not Be Found!");
     }
 
-    // [TEMPORARY HACK FOR FRONTEND TESTING!] Return Null If Partner Doesn't Exist Yet
+    // [Temporary Hack For Frontend Testing!] Return Null If Partner Doesn't Exist Yet
     if (!partner) {
       return null;
     }
@@ -168,7 +168,7 @@ class PartnerService {
     return await this.getPartnerProfile(userId);
   }
 
-  // Handle Manual GPS Location Update Via HTTP API
+  // Handle Manual GPS Location Update Via Http Api
   async updateLocation(userId, latitude, longitude) {
     const partner = await PartnerRepository.findByUserId(userId);
     if (!partner) {

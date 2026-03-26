@@ -11,11 +11,11 @@ const { ObjectId } = require("mongodb");
 const { BadRequest, Conflict, NotFound } = require("../../core/errors/errors");
 const logger = require("../../utils/logger");
 
-// In-memory Registry: OrderId -> Set Of Dispatched DriverIds In Current Batch
+// In-Memory Registry: OrderId -> Set Of Dispatched Driver Ids In Current Batch
 const dispatchRegistry = new Map();
 // In-memory Registry: OrderId -> Global Expiry SetTimeout Handle
 const expiryTimers = new Map();
-// In-memory Registry: OrderId -> Promise Resolver For WaitForAcceptance()
+// In-Memory Registry: OrderId -> Promise Resolver For Wait For Acceptance Promise
 const acceptanceResolvers = new Map();
 
 // Calculate Great Circle Distance Between Two Points In Kilometers -> Formula: Haversine
@@ -37,10 +37,10 @@ class OrderService {
     const lng = parseFloat(pickupLng);
     const lat = parseFloat(pickupLat);
 
-    // 1. Calculate Surge Meta-data (Scarcity-based)
-    const pricingMetadata = await NegotiationService.calculateSuggestedFare(lng, lat, 25); // Approx 25km Trip
+    // 1. Calculate Surge Meta-Data (Scarcity-Based)
+    const pricingMetadata = await NegotiationService.calculateSuggestedFare(lng, lat, 25); // Approx 25Km Trip
 
-    // 2. Identify Blocked Drivers (1-minute Cooldown For Re-discovery)
+    // 2. Identify Blocked Drivers (1-Minute Cooldown For Re-Discovery)
     const activeOrder = await OrderRepository.findActiveByUserId(userId);
     let blockedDriverIds = [];
 
@@ -52,7 +52,7 @@ class OrderService {
         .map(d => new ObjectId(d.driverId));
     }
 
-    // 3. Discovery Pipeline Factory (GeoNear + Match Filters)
+    // 3. Discovery Pipeline Factory (Geo Near + Match Filters)
     const buildDiscoveryPipeline = (excludeIds = []) => {
       const pipeline = [
         {
@@ -147,10 +147,10 @@ class OrderService {
         code: Math.floor(1000 + Math.random() * 9000).toString(), // Secure 4-Digit Otp
         verified: false,
       },
-      penaltyFlag: false, // Tracks Business Violations (e.g. Cancel Post-Otp)
+      penaltyFlag: false, // Tracks Business Violations (E.g. Cancel Post-Otp)
     });
 
-    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (Pickup Lat, Etc.)
     return this.getOrderDetails(order._id.toString(), userId, "user");
   }
 
@@ -170,7 +170,7 @@ class OrderService {
       throw new BadRequest("Order Is Already Finalized!");
     }
 
-    // Penalty Logic: Mid-trip Cancellations (After Pickup Or In-transport)
+    // Penalty Logic: Mid-Trip Cancellations (After Pickup Or In-Transport)
     const isMidTrip = ["to_destination", "pickup_started", "arrived"].includes(order.status);
     const penaltyApplied = isDriver && isMidTrip;
 
@@ -193,7 +193,7 @@ class OrderService {
     if (driverToUnlock) {
       await PartnerRepository.unlockDriver(driverToUnlock);
 
-      // Notify Both Parties Via The Event Delivery Engine (MVP: Manual Trigger For Cancellation)
+      // Notify Both Parties Via The Event Delivery Engine (Mvp: Manual Trigger For Cancellation)
       NotificationService.trigger({
         orderId,
         type: cancelBy === "user" ? "USER_CANCELLED" : "DRIVER_REJECT_ORD",
@@ -218,7 +218,7 @@ class OrderService {
       throw new NotFound("Order Not Found!");
     }
 
-    // Role-based Access Control Registry (Stringify Ids For Strict Comparison)
+    // Role-Based Access Control Registry (Stringify Ids For Strict Comparison)
     const normalizedReqId = requestUserId.toString();
     const isUser = order.userId.toString() === normalizedReqId;
     const isDriver = order.partnerId && order.partnerId.toString() === normalizedReqId;
@@ -241,7 +241,7 @@ class OrderService {
     // Join Limited User Profile (Safety: Name Only Before Trip Accepted)
     const user = await UserRepository.findById(order.userId);
 
-    // Join Partner Details If Assigned (Transparency Post-acceptance)
+    // Join Partner Details If Assigned (Transparency Post-Acceptance)
     let partner = null;
     if (
       order.partnerId &&
@@ -263,7 +263,7 @@ class OrderService {
       }
     }
 
-    // Transform GeoJSON Coordinates Into Lat/Lng Structure With Smart Fallbacks
+    // Transform Geo Json Coordinates Into Lat Lng Structure With Smart Fallbacks
     let pickup = null;
     let destination = null;
     let distanceKm = order.distanceKm || null;
@@ -339,7 +339,7 @@ class OrderService {
     // Broadcast Status Update To Trip Sync Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "arrived" });
 
-    // 5. Proactively Trigger Specific Arrival Notification To User (With OTP Masking Logic)
+    // Proactively Trigger Specific Arrival Notification To User (With Otp Masking Logic)
     await NotificationService.trigger({
       orderId,
       type: "OTP_RECEIVED",
@@ -354,7 +354,7 @@ class OrderService {
       }
     });
 
-    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (Pickup Lat, Etc.)
     return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
@@ -377,13 +377,7 @@ class OrderService {
     });
 
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "pickup_started" });
-    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
-    return this.getOrderDetails(orderId, partnerId, "driver");
-  }
-
-  // Transition To En-route Full Perspective
-  async beginTransport(orderId, partnerId) {
-    await OrderRepository.updateStatusWithGuard(orderId, partnerId, "pickup_started", "to_destination");
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (Pickup Lat, Etc.)
     return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
@@ -397,10 +391,10 @@ class OrderService {
     await PartnerRepository.unlockDriver(partnerId);
     await PartnerRepository.incrementTrips(partnerId); // Synchronize Static Trip Counter
 
-    // 6. Final Status Update To Room Participants
+    // Final Status Update To Room Participants
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "completed" });
 
-    // 7. Trigger Feedback Handshake & Completion Notice For User Via Delivery Engine
+    // Trigger Feedback Handshake & Completion Notice For User Via Delivery Engine
     const order = await OrderRepository.findById(orderId);
     await NotificationService.trigger({
       orderId,
@@ -416,7 +410,7 @@ class OrderService {
       }
     });
 
-    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (Pickup Lat, Etc.)
     return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
@@ -429,13 +423,13 @@ class OrderService {
 
   async getOrderHistory(userId, status) {
     const orders = await OrderRepository.findHistoryByUserId(userId, status);
-    
+
     // Enrich Each History Item With Legacy Fields For Consistent App Ui
     return Promise.all(orders.map(async (order) => {
-      // Logic from getOrderHistoryByPartner but for user role
+      // Logic From Get Order History By Partner But For User Role
       const [lng, lat] = order.pickupLocation?.coordinates || [0, 0];
       const [dLng, dLat] = order.destinationLocation?.coordinates || [0, 0];
-      
+
       return {
         ...order,
         pickupLat: lat,

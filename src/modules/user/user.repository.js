@@ -25,14 +25,6 @@ class UserRepository {
     return usersCollection.findOne({ phone });
   }
 
-  // This Finds A User By Email Or Phone Number For Login
-  async findByEmailOrPhone(email, phone) {
-    const usersCollection = await getCollection("users");
-    return usersCollection.findOne({
-      $or: [{ email }, { phone }],
-    });
-  }
-
   // This Finds A User By Unique Identifier
   async findById(id) {
     const usersCollection = await getCollection("users");

@@ -135,20 +135,20 @@ class AuthService {
 
   async refreshAccessToken(providedRefreshToken) {
     try {
-      // 1. Verify The Refresh Token Signature
+      // Verify The Refresh Token Signature
       const decoded = verifyToken(providedRefreshToken);
 
-      // 2. Check If Refresh Token Exists In Database
+      // Check If Refresh Token Exists In Database
       const tokenDoc = await AuthRepository.findRefreshToken(providedRefreshToken);
       if (!tokenDoc) throw new Unauthorized("Invalid Refresh Token!");
 
-      // 3. Find The User To Ensure They Still Exist And Are Active
+      // Find The User To Ensure They Still Exist And Are Active
       const user = await UserRepository.findById(decoded.id);
       if (!user || user.status !== "active") {
         throw new Unauthorized("User Not Found Or Suspended!");
       }
 
-      // 4. Generate A New Access Token -> Maintain Current Refresh Token
+      // Generate A New Access Token — Maintain Current Refresh Token
       const accessToken = generateToken({
         id: user._id,
         email: user.email,
@@ -189,7 +189,7 @@ class AuthService {
     // Generate A Secure Random Reset Token
     const resetToken = crypto.randomBytes(32).toString("hex");
 
-    // Save Token To Database -> Ttl Index Will Auto-expire After 1 Hour
+    // Save Token To Database — Ttl Index Will Auto-Expire After 1 Hour
     await AuthRepository.saveResetToken(normalizedEmail, resetToken);
 
     // This Triggers The Email Send In The Background To Ensure Instant Api Response
@@ -206,7 +206,7 @@ class AuthService {
     // Hash The New Password
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    // Update Password And Set Passwordchangedat To Invalidate Old Tokens
+    // Update Password And Set Password Changed At To Invalidate Old Tokens
     await UserRepository.updatePasswordByEmail(tokenDoc.email, hashedPassword);
     await AuthRepository.deleteResetToken(token);
 

@@ -2,7 +2,7 @@
 const axios = require("axios");
 const logger = require("./logger");
 
-// This Sends A Password Reset Email To The User Using Brevo HTTP API
+// This Sends A Password Reset Email To The User Using Brevo Http API
 async function sendPasswordResetEmail(toEmail, resetToken) {
   const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
   const apiKey = process.env.BREVO_API_KEY;

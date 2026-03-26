@@ -10,7 +10,7 @@ const { BadRequest } = require("../../core/errors/errors");
 // This Configures Multer To Store File Buffers In Memory
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // This Sets The Maximum File Size Limit To 5 MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // This Sets The Maximum File Size Limit To 5 Mb
   fileFilter: (req, file, cb) => {
     const isImageMime = file.mimetype.startsWith("image/");
     const isImageExt = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.originalname);

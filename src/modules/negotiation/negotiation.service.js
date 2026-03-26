@@ -49,14 +49,14 @@ class NegotiationService {
 
   // Initiate A New Negotiation Session (No Transactions — Compatible With All MongoDB Tiers)
   async initiate(userId, { orderId, driverId, version }) {
-    // 1. Atomically Lock Driver — Returns Null If Driver Is Busy
+    // Atomically Lock Driver — Returns Null If Driver Is Busy
     const driverLock = await PartnerRepository.lockForNegotiation(driverId, 60000);
     if (!driverLock) {
       throw new Conflict("Driver Is Currently Busy Or In Another Negotiation!");
     }
 
     try {
-      // 2. Create Negotiation Session Document
+      // Create Negotiation Session Document
       const negotiationSession = await NegotiationRepository.createSession({
         orderId,
         userId,
@@ -65,7 +65,7 @@ class NegotiationService {
         expiresAt: new Date(Date.now() + 29 * 60 * 1000), // 29 Minutes To Respond
       });
 
-      // 3. Link Negotiation To Order (With OCC Version Guard)
+      // Link Negotiation To Order (With Occ Version Guard)
       const order = await OrderRepository.initiateNegotiation(orderId, negotiationSession._id, version);
       if (!order) {
         // Rollback: Unlock Driver And Remove Session If Order Link Fails
@@ -74,7 +74,7 @@ class NegotiationService {
         throw new Conflict("Unable To Start Negotiation — Order State Has Changed!");
       }
 
-      // 4. Trigger Dispatch Delivery Via New Event Engine (MVP: Replaces Manual Socket Emit)
+      // Trigger Dispatch Delivery Via New Event Engine (Replaces Manual Socket Emit)
       await NotificationService.trigger({
         orderId,
         type: "NEGOTIATION_REQ",
@@ -106,11 +106,11 @@ class NegotiationService {
       throw new Conflict("Negotiation Session Inactive Or Already Closed!");
     }
 
-    // 1. Derive Critical Values From Message History
+    // Derive Critical Values From Message History
     const roundCount = negotiation.messages.length;
     const finalPrice = negotiation.messages[roundCount - 1]?.amount;
 
-    // 2. Update Order Status (Guarded By OCC)
+    // Update Order Status (Guarded By Occ)
     const updatedOrder = await OrderRepository.updateStatusWithGuard(orderId, negotiation.driverId, "negotiating", "accepted", {
       partnerId: new ObjectId(negotiation.driverId),
       acceptedAt: new Date(),
@@ -121,13 +121,13 @@ class NegotiationService {
       throw new Conflict("Double-booking Collision Or State Mismatch Detected!");
     }
 
-    // 3. Bind Driver To Operational Trip
+    // Bind Driver To Operational Trip
     await PartnerRepository.lockDriver(negotiation.driverId, orderId);
 
-    // 4. Close Negotiation Session
+    // Close Negotiation Session
     await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
 
-    // 5. Trigger Acceptance Notifications For Both Parties (Sync Handshake)
+    // Trigger Acceptance Notifications For Both Parties (Sync Handshake)
     await NotificationService.trigger({
       orderId, type: "USER_ACCEPTED", recipientId: negotiation.driverId, actorId: negotiation.userId,
       priority: "HIGH", channels: ["push", "in_app", "store"], data: { orderId, finalPrice }
@@ -138,7 +138,7 @@ class NegotiationService {
       priority: "HIGH", channels: ["push", "in_app", "store"], data: { orderId, finalPrice }
     });
 
-    // 5. Log Analytics Asynchronously (Non-Critical — Does Not Block Flow)
+    // Log Analytics Asynchronously (Non-Critical — Does Not Block Flow)
     const order = await OrderRepository.findById(orderId);
     AnalyticsService.logNegotiationEvent(
       orderId,
@@ -158,11 +158,11 @@ class NegotiationService {
     const negotiation = await NegotiationRepository.findById(sessionId);
     if (!negotiation || negotiation.status !== "active") return;
 
-    // 1. Mark Session As Ended
+    // Mark Session As Ended
     const outcome = reason === "no_response_timeout" ? "expired_timeout" : "rejected";
     await NegotiationRepository.updateStatus(sessionId, outcome, { endedReason: reason });
 
-    // 2. Trigger Rejection Notifications (Only If Manually Rejected, Not For Worker Timeouts)
+    // Trigger Rejection Notifications (Only If Manually Rejected, Not For Worker Timeouts)
     if (reason !== "no_response_timeout") {
       await NotificationService.trigger({
         orderId: negotiation.orderId, type: "USER_REJECTED", recipientId: negotiation.driverId, actorId: negotiation.userId,
@@ -175,13 +175,13 @@ class NegotiationService {
       });
     }
 
-    // 2. Clear Driver Lock
+    // Clear Driver Lock
     await PartnerRepository.unlockFromNegotiation(negotiation.driverId);
 
-    // 3. Reset Order State And Record Attempt
+    // Reset Order State And Record Attempt
     await OrderRepository.recordNegotiationAttempt(negotiation.orderId, negotiation.driverId);
 
-    // 4. Log Analytics Asynchronously (Non-Critical)
+    // Log Analytics Asynchronously (Non-Critical)
     AnalyticsService.logNegotiationEvent(
       negotiation.orderId,
       sessionId,
@@ -193,12 +193,12 @@ class NegotiationService {
     return { orderId: negotiation.orderId, userId: negotiation.userId, driverId: negotiation.driverId };
   }
 
-  // Retrieve Full Bidding Transcript For Auditing (admins)
+  // Retrieve Full Bidding Transcript For Auditing (Admins)
   async getHistory(orderId) {
-    // 1. Try Finding Active Session First
+    // Try Finding Active Session First
     let session = await NegotiationRepository.findActiveByOrderId(orderId);
 
-    // 2. If Not Active, Look Up The Order's Historical Archive
+    // If Not Active, Look Up The Order Historical Archive
     if (!session) {
       const order = await OrderRepository.findById(orderId);
       if (order && order.negotiationHistory && order.negotiationHistory.length > 0) {

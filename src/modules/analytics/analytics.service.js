@@ -13,7 +13,7 @@ class AnalyticsService {
         sessionId: new ObjectId(sessionId),
         driverId: new ObjectId(driverId),
         roundCount: round,
-        outcome, // accepted, rejected, expired_timeout
+        outcome, // Accepted | Rejected | Expired Timeout
         finalPrice: finalAmount,
         estimatedFare,
         timestamp: new Date(),
@@ -23,7 +23,7 @@ class AnalyticsService {
     }
   }
 
-  // Record Driver Penalty (Post-OTP Cancellation)
+  // Record Driver Penalty (Post-Otp Cancellation)
   async logDriverPenalty(driverId, orderId, reason) {
     try {
       const collection = await getCollection("driver_penalties");

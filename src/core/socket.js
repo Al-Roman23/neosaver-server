@@ -42,7 +42,7 @@ class SocketService {
 
     const locationRateLimits = new Map();
 
-    // Security Guard: Distributed Replay Attack Defense (timestamp + Nonce)
+    // Security Guard: Distributed Replay Attack Defense (Timestamp + Nonce)
     const validateReplay = async (timestamp, nonce) => {
       try {
         const skew = Math.abs(Date.now() - timestamp);
@@ -51,7 +51,7 @@ class SocketService {
         const { getCollection } = require("../config/db");
         const collection = await getCollection("nonces");
 
-        // Atomic Insert-if-not-exists (Unique Constraint Handle)
+        // Atomic Insert-If-Not-Exists (Unique Constraint Handle)
         await collection.insertOne({ nonce, createdAt: new Date() });
         return true;
       } catch (err) {
@@ -63,28 +63,21 @@ class SocketService {
     this.io.on("connection", (socket) => {
       const userId = socket.userId;
 
-      // 1. Map User Id To Socket Id
+      // Map User Id To Socket Id
       this.users.set(userId.toString(), socket.id);
 
-      // 2. Join A Dedicated User Room For Multi-device Synchronized Delivery
+      // Join A Dedicated User Room For Multi-Device Synchronized Delivery
       socket.join("user_" + userId);
-
-      // 3. Force Drivers To Join A Dedicated Room For Dispatch Targeting
-      socket.join("driver_" + userId);
 
       logger.info({ userId, socketId: socket.id }, "User Online — Listening For Core Engine Events.");
 
       // Update Last Socket Connection For Partners Natively (Silently Drops For Non-partners)
       PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => { });
 
-      // Attempt To Deliver Any Pending Offline Notifications Asynchronously
-      const NotificationService = require("../modules/notification/notification.service");
-      const NotificationRepository = require("../modules/notification/notification.repository");
-
       // Sync Missed Events On Connection
       this.deliverPending(userId, socket);
 
-      // 4. Listener For Driver Location Updates With Rate Limiting
+      // Listener For Driver Location Updates With Rate Limiting
       socket.on("driver_location_update", async ({ lat, lng }) => {
         try {
           if (!lat || !lng) return;
@@ -105,7 +98,7 @@ class SocketService {
           if (partner.currentOrderId) {
             const orderId = partner.currentOrderId.toString();
 
-            // Sync Location To Order Document (Reopen-app Safety)
+            // Sync Location To Order Document (Reopen-App Safety)
             await OrderRepository.updateDriverLocation(orderId, lng, lat);
 
             // Broadcast Live Push To The Dedicated Order Room (With Distance Proximity Metadata)
@@ -145,8 +138,8 @@ class SocketService {
             orderId, driverId, version
           });
 
-          // The driver session joining and notification delivery are now handled 
-          // atomically within the NegotiationService and NotificationService layers.
+          // Driver Session Joining And Notification Delivery Are Handled
+          // Atomically Within The Negotiation Service And Notification Service Layers
           socket.join("order_" + orderId);
           const driverSocketId = this.users.get(driverId.toString());
           if (driverSocketId) {
@@ -161,7 +154,7 @@ class SocketService {
         }
       });
 
-      // Listener: Bidding Interaction (user/driver Counter-offer Or Respond)
+      // Listener: Bidding Interaction (User Or Driver Counter-Offer Or Respond)
       socket.on("negotiation_respond", async ({ sessionId, orderId, action, amount, sequence, timestamp, nonce }, ack) => {
         try {
           if (!(await validateReplay(timestamp, nonce))) return;
@@ -175,18 +168,18 @@ class SocketService {
           if (sequence <= (session.lastSequence || 0)) return ack({ success: false, message: "Out-of-Order Packet Trapped!" });
 
           if (action === "accept") {
-            // 1. Service-layer Atomic Completion (Business Rules + Analytics + Delivery Engine)
+            // Service-Layer Atomic Completion (Business Rules + Analytics + Delivery Engine)
             await NegotiationService.completeNegotiation(sessionId, orderId);
             return ack({ success: true });
           }
 
           if (action === "reject") {
-            // 2. Service-layer Atomic Rejection (Business Rules + Analytics + Delivery Engine)
+            // Service-Layer Atomic Rejection (Business Rules + Analytics + Delivery Engine)
             await NegotiationService.failNegotiation(sessionId, "rejected_by_party");
             return ack({ success: true });
           }
 
-          // Add Message (Target Document Has Status: 'active' And 'lastsequence' Guard)
+          // Add Message (Target Document Has Status Active And Last Sequence Guard)
           const updatedSession = await NegotiationRepository.addMessage(sessionId, {
             sender: socket.userId.toString() === session.userId.toString() ? "user" : "driver",
             amount,
@@ -221,7 +214,7 @@ class SocketService {
         }
       });
 
-      // 5. Listener For Client-side Notification Acknowledgments (ACK Master Flow)
+      // Listener For Client-Side Notification Acknowledgments (Ack Master Flow)
       socket.on("notification_ack", async ({ notificationId }) => {
         try {
           if (!notificationId) return;
@@ -269,7 +262,7 @@ class SocketService {
       };
 
       for (const n of unconfirmed) {
-        // 1. Map Core Type To Client-Side Event Signature
+        // Map Core Type To Client-Side Event Signature
         const eventName = n.type === "OTP_RECEIVED" ? "otp_received" : "notification_received";
         const payload = {
           notificationId: n._id.toString(),
@@ -279,10 +272,10 @@ class SocketService {
           timestamp: n.createdAt
         };
 
-        // 2. Emit Primary Unified Event
+        // Emit Primary Unified Event
         socket.emit(eventName, payload);
 
-        // 3. Emit Parallel Legacy Event If Mapping Found
+        // Emit Parallel Legacy Event If Mapping Found
         if (legacyMap[n.type]) {
           socket.emit(legacyMap[n.type], payload);
         }

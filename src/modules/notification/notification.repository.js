@@ -15,10 +15,10 @@ class NotificationRepository {
       recipientId: new ObjectId(notificationData.recipientId),
       actorId: notificationData.actorId ? new ObjectId(notificationData.actorId) : null,
       orderId: new ObjectId(notificationData.orderId),
-      deliveryStatus: notificationData.deliveryStatus || "PENDING", // PENDING | SENT | FAILED
-      readStatus: "UNREAD", // UNREAD | READ
+      deliveryStatus: notificationData.deliveryStatus || "PENDING", // Pending | Sent | Failed
+      readStatus: "UNREAD", // Unread | Read
       isSuppressed: !!notificationData.isSuppressed, // Audit Flag
-      pushStatus: "NONE", // NONE | QUEUED | SENT | FAILED
+      pushStatus: "NONE", // None | Queued | Sent | Failed
       sequence: notificationData.sequence,
       retryCount: 0,
       createdAt: new Date(),

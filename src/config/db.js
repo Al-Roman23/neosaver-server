@@ -51,25 +51,25 @@ async function ensureIndexes() {
       }
     };
 
-    // 1. Users
+    // Users
     await safeIndex("users", { email: 1 }, { unique: true });
     await safeIndex("users", { phone: 1 }, { unique: true });
 
-    // 2. Auth Tokens
+    // Auth Tokens
     await safeIndex("reset_tokens", { email: 1 });
     await safeIndex("reset_tokens", { createdAt: 1 }, { expireAfterSeconds: 3600 });
     await safeIndex("refresh_tokens", { token: 1 });
     await safeIndex("refresh_tokens", { createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
-    // 3. Security (nonces)
+    // Security (Nonces)
     await safeIndex("nonces", { nonce: 1 }, { unique: true });
     await safeIndex("nonces", { createdAt: 1 }, { expireAfterSeconds: 600 });
 
-    // 4. Concurrency (worker Locks)
+    // Concurrency (Worker Locks)
     await safeIndex("worker_locks", { lockKey: 1 }, { unique: true });
     await safeIndex("worker_locks", { createdAt: 1 }, { expireAfterSeconds: 60 });
 
-    // 5. Mission Critical: Partners (geo + Locking)
+    // Mission Critical: Partners (Geo + Locking)
     await safeIndex("partners", { email: 1 }, { unique: true });
     await safeIndex("partners", { userId: 1 }, { unique: true });
     await safeIndex("partners", { nationalId: 1 }, { unique: true });
@@ -79,12 +79,12 @@ async function ensureIndexes() {
     await safeIndex("partners", { isNegotiating: 1 }, { partialFilterExpression: { isNegotiating: true } });
     await safeIndex("partners", { negotiationLockExpiresAt: 1 });
 
-    // 6. Negotiation Sessions
+    // Negotiation Sessions
     await safeIndex("negotiation_sessions", { orderId: 1, currentRound: -1 });
     await safeIndex("negotiation_sessions", { status: 1, expiresAt: 1 });
     await safeIndex("negotiation_sessions", { userId: 1, status: 1 });
 
-    // 7. Orders (geo + Performance)
+    // Orders (Geo + Performance)
     await safeIndex("orders", { userId: 1, status: 1 });
     await safeIndex("orders", { partnerId: 1, status: 1 });
     await safeIndex("orders", { status: 1, createdAt: -1 });
@@ -92,19 +92,19 @@ async function ensureIndexes() {
     await safeIndex("orders", { version: 1 });
     await safeIndex("orders", { negotiationId: 1 });
 
-    // 8. Public Content & Feedbacks
+    // Public Content And Feedbacks
     await safeIndex("feedbacks", { createdAt: 1 });
     await safeIndex("terms_and_conditions", { sectionNumber: 1 }, { unique: true });
     await safeIndex("privacy_policy", { sectionNumber: 1 }, { unique: true });
     await safeIndex("about_us", { sectionNumber: 1 }, { unique: true });
     await safeIndex("offline_notifications", { userId: 1, delivered: 1 });
 
-    // 9. Analytics
+    // Analytics
     await safeIndex("negotiation_analytics", { driverId: 1, timestamp: -1 });
     await safeIndex("negotiation_analytics", { orderId: 1 });
     await safeIndex("driver_penalties", { driverId: 1, timestamp: -1 });
 
-    logger.info("--- DATABASE INDEX PROVISIONING REPORT ---");
+    logger.info("--- Database Index Provisioning Report ---");
     results.forEach(msg => logger.info(msg));
     logger.info("------------------------------------------");
 

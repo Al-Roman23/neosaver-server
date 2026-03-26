@@ -11,18 +11,18 @@ class NotificationService {
   // Central Single Entry Point For All Notification And Socket Callbacks
   async trigger({ orderId, type, recipientId, actorId, priority, channels = ["in_app", "store"], data = {}, version = 0 }) {
     try {
-      // 1. Generate Contextual Idempotency Key
+      // Generate Contextual Idempotency Key
       const rawKey = `${recipientId}_${orderId}_${type}_${version}_${actorId}`;
       const idempotencyKey = crypto.createHash("md5").update(rawKey).digest("hex");
 
-      // 2. Idempotency Check (Check FIRST Before Incrementing)
+      // Idempotency Check (Verify First Before Incrementing)
       const isNewEvent = await IdempotencyKeyRepository.createKey(idempotencyKey);
       if (!isNewEvent) {
         logger.info({ orderId, type, recipientId }, "Duplicate Notification Trigger Suppressed!");
         return { success: true, duplicated: true };
       }
 
-      // 3. Security Guard: OTP Only Allowed If Order Status Is Arrived
+      // Security Guard: Otp Only Allowed If Order Status Is Arrived
       if (type === "OTP_RECEIVED") {
         const order = await OrderRepository.findById(orderId);
         if (!order || order.status !== "arrived") {
@@ -31,26 +31,25 @@ class NotificationService {
         }
       }
 
-      // 4. Atomic Sequence Allocation
+      // Atomic Sequence Allocation
       const sequence = await SequenceCounterRepository.getNextSequence(orderId, recipientId);
 
-      // 5. Hybrid Sync: Enrich Data With Full Order Details For Dynamic Ui Support
-      // We import OrderService locally to avoid circular dependencies
+      // Hybrid Sync: Enrich Data With Full Order Details For Dynamic Ui Support
+      // We Import Order Service Locally To Avoid Circular Dependencies
       if (orderId && !data.order) {
         const OrderService = require("../order/order.service");
-        // [HARDENING] Bypass security to ensure enrichment always succeeds for system triggers
+        // Bypassing Security To Ensure System Triggers Can Always Enrich Payload
         const fullOrder = await OrderService.getOrderDetails(orderId, recipientId, "driver", true).catch(() => null);
-        
+
         if (fullOrder) {
           data.order = fullOrder;
-          
-          // [HARDENING] FLATTEN legacy fields into top-level data for maximum Flutter compatibility
-          // This ensures the app finds these fields even if it doesn't look inside the 'order' object.
+
+          // Flutter Compatibility: Mirroring Fields At Top-Level So Older App Versions Find Them
           const legacyFields = [
             "pickupLat", "pickupLng", "destinationLat", "destinationLng",
             "pickupAddress", "destinationAddress", "distanceKm", "distanceToPickupKm"
           ];
-          
+
           legacyFields.forEach(field => {
             if (fullOrder[field] !== undefined && data[field] === undefined) {
               data[field] = fullOrder[field];
@@ -59,15 +58,15 @@ class NotificationService {
         }
       }
 
-      // 6. Permanent Persistence (SSOT For Audit)
+      // Permanent Persistence (Single Source Of Truth For Audit)
       const notificationRecord = {
         recipientId,
         actorId,
         orderId,
         type,
-        priority, // HIGH | MEDIUM | LOW
-        channels, // ["push", "in_app", "store"]
-        content: data, // Hashed OTPs / Price Details Only
+        priority, // High | Medium | Low
+        channels, // Push | In App | Store
+        content: data, // Hashed Otps And Price Details Only
         sequence,
         idempotencyKey,
       };
@@ -75,7 +74,7 @@ class NotificationService {
       const result = await NotificationRepository.createNotification(notificationRecord);
       const notificationId = result.insertedId;
 
-      // 7. Multi-Channel Routing (MVP Socket Delivery)
+      // Multi-Channel Routing (Mvp Socket Delivery)
       if (channels.includes("in_app")) {
         await this.deliverRealTime(notificationId, recipientId, type, data, sequence);
       }
@@ -105,7 +104,8 @@ class NotificationService {
 
     socketService.io.to("user_" + userId).emit(eventName, payload);
 
-    // Backward Compatibility: Emit Original Legacy Event Names To Room
+    // Flutter Compatibility: Older App Versions Listen On These Legacy Event Names Directly
+    // We Maintain Both Channels So The App Works Without A Forced Update
     const legacyMap = {
       NEGOTIATION_REQ: "new_negotiation_request",
       OTP_RECEIVED: "driver_arrived", // Mapping To Existing Test Listener
@@ -115,7 +115,7 @@ class NotificationService {
     };
 
     if (legacyMap[type]) {
-      // [LEGACY SYNC] Emit raw data directly for compatibility with older app versions
+      // Emit Raw Data Directly For Compatibility With Older App Versions
       socketService.io.to("user_" + userId).emit(legacyMap[type], data);
     }
   }

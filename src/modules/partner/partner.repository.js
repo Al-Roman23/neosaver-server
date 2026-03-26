@@ -42,7 +42,7 @@ class PartnerRepository {
     );
   }
 
-  // Verify A Partner Manually (admin Only)
+  // Verify A Partner Manually (Admin Only)
   async verifyPartner(partnerId, isVerified = true, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(
@@ -81,7 +81,7 @@ class PartnerRepository {
     );
   }
 
-  // Atomically Lock Driver For A Negotiation Session (Prevents Double-negotiation)
+  // Atomically Lock Driver For A Negotiation Session (Prevents Double-Negotiation)
   async lockForNegotiation(userId, timeoutMs = 60000, options = {}) {
     const partnersCollection = await getCollection("partners");
     const expiresAt = new Date(Date.now() + timeoutMs);
@@ -139,7 +139,7 @@ class PartnerRepository {
     );
   }
 
-  // Atomically Lock Driver To An Order (Prevents Double-booking)
+  // Atomically Lock Driver To An Order (Prevents Double-Booking)
   async lockDriver(userId, orderId, options = {}) {
     const partnersCollection = await getCollection("partners");
     return partnersCollection.updateOne(

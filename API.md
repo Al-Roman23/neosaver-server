@@ -79,7 +79,7 @@ This is the **definitive, complete reference** for integrating the NeoSaver fron
 | **Create Order** | POST | `/` | user | `pickupLat`, `pickupLng`, `pickupAddress` (optional), `destinationLat`, `destinationLng`, `destinationAddress` (optional), `notes` (optional), `fareEstimate` (optional) | Creates a `pending` order. **Save the `_id` (orderId) and `version` from the response.** |
 | **Get Active Order** | GET | `/active` | user | N/A | Returns the current live trip. Includes full driver profile once `accepted`. |
 | **Get Order History** | GET | `/history` | user | Query: `status` (optional filter) | Returns past trips. |
-| **Get Order Details** | GET | `/:id` | user, driver, admin | N/A | Full order document. Returns flat `pickup` and `destination` objects (lat, lng, address) and `distanceKm`. |
+| **Get Order Details** | GET | `/:id` | user, driver, admin | N/A | Full order document. Includes nested `pickup`/`destination` objects AND legacy flattened fields (`pickupLat`, `pickupAddress`, etc.) for backward compatibility. |
 | **Cancel Order** | DELETE | `/:id` | user, driver | N/A | Atomically cancels. If driver cancels mid-trip (`arrived`, `pickup_started`, `to_destination`), a `penaltyFlag: true` is set. |
 | **Mark Arrived** | PATCH | `/:id/arrived` | driver | N/A | Transitions order to `arrived`. **Triggers `otp_received` socket event to user.** |
 | **Start Trip** | PATCH | `/:id/start` | driver | `otp` (4-digit string) | Driver asks patient for OTP verbally. Backend validates. Transitions to `pickup_started`. |
@@ -97,7 +97,10 @@ pending → negotiating → accepted → arrived → pickup_started → to_desti
 ```
 
 > [!NOTE]
-> **Data Structure Note**: The `Order` response now returns addresses in a flat structure: `pickup: { lat, lng, address }` and `destination: { lat, lng, address }`. If the address string is not provided during creation, the backend provides a **Smart Fallback** (e.g., `"Location [23.81, 90.41]"`).
+> **Data Structure Note**: The `Order` response returns geographic data in two ways for maximum compatibility:
+> 1. Nested objects (`pickup: { lat, lng, address }`) for modern consumers.
+> 2. "Zero-Change" Top-Level legacy keys (`pickupLat`, `pickupLng`, `pickupAddress`, `destinationLat`, etc.) for older Flutter clients.
+> If the address string is missing, the backend provides a **Smart Fallback** (e.g., `"Location [23.81, 90.41]"`).
 >
 > **Distance Reporting**: The system automatically calculates `distanceKm` (trip distance) and `distanceToPickupKm` (for drivers) using the Haversine formula. Frontend developers should use these fields for display.
 
