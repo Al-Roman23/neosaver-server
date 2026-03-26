@@ -354,7 +354,8 @@ class OrderService {
       }
     });
 
-    return updated;
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
   // Trip Start — Mandatory Otp Verification
@@ -376,12 +377,14 @@ class OrderService {
     });
 
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "pickup_started" });
-    return updated;
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
   // Transition To En-route Full Perspective
   async beginTransport(orderId, partnerId) {
-    return OrderRepository.updateStatusWithGuard(orderId, partnerId, "pickup_started", "to_destination");
+    await OrderRepository.updateStatusWithGuard(orderId, partnerId, "pickup_started", "to_destination");
+    return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
   // Final Completion — Driver Payout Ready
@@ -413,7 +416,8 @@ class OrderService {
       }
     });
 
-    return updated;
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    return this.getOrderDetails(orderId, partnerId, "driver");
   }
 
   // Get Active Order Support For Current Session Sync (Includes Populated Driver Details)
@@ -424,7 +428,22 @@ class OrderService {
   }
 
   async getOrderHistory(userId, status) {
-    return OrderRepository.findHistoryByUserId(userId, status);
+    const orders = await OrderRepository.findHistoryByUserId(userId, status);
+    
+    // Enrich Each History Item With Legacy Fields For Consistent App Ui
+    return Promise.all(orders.map(async (order) => {
+      // Logic from getOrderHistoryByPartner but for user role
+      const [lng, lat] = order.pickupLocation?.coordinates || [0, 0];
+      const [dLng, dLat] = order.destinationLocation?.coordinates || [0, 0];
+      
+      return {
+        ...order,
+        pickupLat: lat,
+        pickupLng: lng,
+        destinationLat: dLat,
+        destinationLng: dLng,
+      };
+    }));
   }
 
   async getActiveOrderByPartner(partnerId) {
