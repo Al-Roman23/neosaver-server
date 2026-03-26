@@ -35,11 +35,27 @@ class NotificationService {
       const sequence = await SequenceCounterRepository.getNextSequence(orderId, recipientId);
 
       // 5. Hybrid Sync: Enrich Data With Full Order Details For Dynamic Ui Support
+      // We import OrderService locally to avoid circular dependencies
       if (orderId && !data.order) {
         const OrderService = require("../order/order.service");
-        const fullOrder = await OrderService.getOrderDetails(orderId, recipientId, "driver").catch(() => null);
+        // [HARDENING] Bypass security to ensure enrichment always succeeds for system triggers
+        const fullOrder = await OrderService.getOrderDetails(orderId, recipientId, "driver", true).catch(() => null);
+        
         if (fullOrder) {
           data.order = fullOrder;
+          
+          // [HARDENING] FLATTEN legacy fields into top-level data for maximum Flutter compatibility
+          // This ensures the app finds these fields even if it doesn't look inside the 'order' object.
+          const legacyFields = [
+            "pickupLat", "pickupLng", "destinationLat", "destinationLng",
+            "pickupAddress", "destinationAddress", "distanceKm", "distanceToPickupKm"
+          ];
+          
+          legacyFields.forEach(field => {
+            if (fullOrder[field] !== undefined && data[field] === undefined) {
+              data[field] = fullOrder[field];
+            }
+          });
         }
       }
 

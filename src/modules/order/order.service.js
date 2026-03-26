@@ -212,7 +212,7 @@ class OrderService {
   }
 
   // Get Detailed Information For A Single Order (Includes Non-sensitive User Profile)
-  async getOrderDetails(orderId, requestUserId, requestUserRole) {
+  async getOrderDetails(orderId, requestUserId, requestUserRole, bypassSecurity = false) {
     const order = await OrderRepository.findById(orderId);
     if (!order) {
       throw new NotFound("Order Not Found!");
@@ -233,8 +233,8 @@ class OrderService {
       }
     }
 
-    // Shield Data From Non-participants
-    if (!isUser && !isDriver && !isAdmin && !isNegotiator) {
+    // Shield Data From Non-participants (Skip If System Bypass Is Explicitly Enabled)
+    if (!bypassSecurity && !isUser && !isDriver && !isAdmin && !isNegotiator) {
       throw new BadRequest("Access Denied: You Are Not A Participant Of This Order.");
     }
 
