@@ -5,6 +5,7 @@ const NegotiationService = require("../negotiation/negotiation.service");
 const UserRepository = require("../user/user.repository");
 const NegotiationRepository = require("../negotiation/negotiation.repository");
 const socketService = require("../../core/socket");
+const NotificationService = require("../notification/notification.service");
 const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { BadRequest, Conflict, NotFound } = require("../../core/errors/errors");
@@ -176,8 +177,17 @@ class OrderService {
 
     if (driverToUnlock) {
       await PartnerRepository.unlockDriver(driverToUnlock);
-      socketService.io.to("driver_" + driverToUnlock).emit("order_cancelled", { orderId, by: cancelBy });
-      socketService.sendToUser(order.userId.toString(), "order_cancelled", { orderId, by: cancelBy });
+
+      // Notify Both Parties Via The Event Delivery Engine (MVP: Manual Trigger For Cancellation)
+      NotificationService.trigger({
+        orderId,
+        type: cancelBy === "user" ? "USER_CANCELLED" : "DRIVER_REJECT_ORD",
+        recipientId: cancelBy === "user" ? driverToUnlock : order.userId.toString(),
+        actorId: userId,
+        priority: "MEDIUM",
+        channels: ["in_app", "store"],
+        data: { orderId, by: cancelBy }
+      });
     }
 
     return {
@@ -252,14 +262,22 @@ class OrderService {
     // Fetch Full Record To Extract User Id And Otp For Notification
     const order = await OrderRepository.findById(orderId);
 
-    // Broadcast Status Update To Trip Room
+    // Broadcast Status Update To Trip Sync Room
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "arrived" });
 
-    // Proactively Push Specific Arrival Notification To User (With Otp)
-    socketService.sendToUser(order.userId.toString(), "driver_arrived", {
-      message: "Your Driver Has Arrived! Provide The OTP To Start Trip Safely.",
-      otp: order.otp.code,
-      orderId: order._id
+    // 5. Proactively Trigger Specific Arrival Notification To User (With OTP Masking Logic)
+    await NotificationService.trigger({
+      orderId,
+      type: "OTP_RECEIVED",
+      recipientId: order.userId.toString(),
+      actorId: partnerId,
+      priority: "HIGH",
+      channels: ["in_app", "store"],
+      data: {
+        message: "Your Driver Has Arrived! Provide The OTP To Start Trip Safely.",
+        otp: order.otp.code,
+        orderId: order._id
+      }
     });
 
     return updated;
@@ -302,15 +320,23 @@ class OrderService {
     await PartnerRepository.unlockDriver(partnerId);
     await PartnerRepository.incrementTrips(partnerId); // Synchronize Static Trip Counter
 
-    // Broadcast Status Update To Trip Room
+    // 6. Final Status Update To Room Participants
     socketService.io.to("order_" + orderId).emit("trip_status_update", { status: "completed" });
 
-    // Trigger Feedback Handshake For User
+    // 7. Trigger Feedback Handshake & Completion Notice For User Via Delivery Engine
     const order = await OrderRepository.findById(orderId);
-    socketService.sendToUser(order.userId.toString(), "ready_for_feedback", {
-      message: "Trip Completed! Please Share Your Feedback To Help Us Improve.",
-      orderId: order._id,
-      partnerId: order.partnerId
+    await NotificationService.trigger({
+      orderId,
+      type: "DRIVER_FINISHED",
+      recipientId: order.userId.toString(),
+      actorId: partnerId,
+      priority: "HIGH",
+      channels: ["push", "in_app", "store"],
+      data: {
+        message: "Trip Completed! Please Share Your Feedback To Help Us Improve.",
+        orderId: order._id,
+        partnerId: order.partnerId
+      }
     });
 
     return updated;

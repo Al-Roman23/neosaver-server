@@ -1,12 +1,12 @@
-// This File Handles The Notification Routes
+// This File Maps The Notification Endpoints For The Elite Event Delivery Engine
 const express = require("express");
 const router = express.Router();
 const NotificationController = require("./notification.controller");
 
-// Send Or Queue Notification To A Specific User
+// Dispatches A Mission-critical Notification To Specific Users
 router.post("/send", NotificationController.sendNotification);
 
-// Retrieve Pending Notifications For Testing
-router.get("/pending/:userId", NotificationController.getPendingNotifications);
+// Retrieves Persistent Notification Log And Audit History For Dashboard
+router.get("/history/:userId", NotificationController.getHistory);
 
 module.exports = router;

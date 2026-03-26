@@ -1,89 +1,85 @@
-# 🚑 NeoSaver Core Engine — Primary Ambulance Dispatch & Negotiation System (Server)
+# 🚑 NeoSaver Core Engine — High-Reliability Ambulance Dispatch & Event System
 
-### 📌 Project Context
-This is the mission-critical **Backend API Engine** for **NeoSaver**, a life-saving ambulance dispatch ecosystem designed for the **People’s Republic of Bangladesh**.
+## 🌟 Project Vision
+NeoSaver is a mission-critical **Emergency Response Ecosystem** designed for the **People’s Republic of Bangladesh**. This backend core handles the high-stakes coordination between patients in distress and life-saving ambulance partners.
 
-The system is built on a sophisticated **Manual Driver Selection & Multi-Round Bidding Protocol**. This ensures fair pricing, maximizes driver availability, and provides users with a transparent selection process during medical emergencies. Unlike automated dispatch models, this architecture prioritizes the human element of negotiation to find the best possible match for every urgent trip.
-
-### 🌍 Production Registry
-*   **Live Backend URL**: `https://neosaver-server.onrender.com/v1/api`
-*   **Live WebSocket URL**: `https://neosaver-server.onrender.com`
-*   **Live Health Status**: `https://neosaver-server.onrender.com/health`
+The architecture moves beyond simple "booking" into **High-Integrity Negotiation & Event Delivery**, ensuring every second counts. This is not just a server; it is a **Reliability-First State Machine**.
 
 ---
 
-### 🏛 Advanced Industrial Architecture
-**Pattern: Distributed Modular Domain-Based Vertical Slice**  
-The system is built as a **Modular Monolith**, segmented into **Bounded Contexts**. This ensures that the business logic for "Negotiation" is entirely decoupled from "User Profiles" or "Auth," allowing for independent scaling and maintenance.
+## 🏛️ Advanced Engineering Architecture
 
-#### 🧠 The SSOT State Machine
-*   **Single Source of Truth (SSOT)**: The `Order` document is the absolute source of truth. All sub-processes (Negotiations) are ephemeral handlers that transactionally update the main trip lifecycle.
-*   **Optimistic Concurrency Control (OCC)**: Every state-changing operation uses a `version` field and atomic MongoDB updates (`findOneAndUpdate`) to prevent race conditions and "double-booking" in a high-concurrency environment.
-*   **Global Reconciliation Pulse**: A dedicated **Background Worker** (30s Heartbeat) monitors the cluster for stale driver locks, expired negotiations, and "ghost" trips, ensuring the system "auto-heals" after network drops or client crashes.
+### 🛡️ 1. Elite Event Delivery Engine (Reliability Layer)
+The standout feature of this system is its custom-built **Notification Reliability Engine**. Designed to survive network drops and client crashes, it features:
+*   **ACK-Aware Delivery**: The server tracks client receipts (`notification_ack`). If a client doesn't acknowledge within we recover via background retry.
+*   **Exponential Backoff Retries**: High-priority events (NEGOTIATION_REQ, OTP_RECEIVED) automatically retry at 5s, 15s, and 45s intervals if the socket is unstable.
+*   **Atomic Sequencing**: Every event is assigned a globally ordered `sequence` number (scoped to Order + User), allowing the frontend to reconstruct the exact timeline regardless of network jitter.
+*   **Context-Aware Idempotency**: MD5-hashed idempotency keys prevent duplicate notifications for the same state change, even under heavy retry loads.
 
----
+### 🤝 2. Real-Time Negotiation Protocol
+A sophisticated bidding system that facilitates fair-market discovery:
+*   **Concurrency Guard**: Drivers are atomically locked (`isNegotiating: true`) during active bids to prevent double-booking.
+*   **Transcript Persistence**: Every bid, counter-bid, and rejection is logged to a permanent audit trail for administrative review and analytics.
+*   **Three-Round Protocol**: Enforces a strict 3-round limit on negotiations to ensure decisions are made rapidly during medical emergencies.
 
-### 🔥 Mission-Critical Features
-1.  **Manual Selection Discovery**: Users can discover nearby online verified drivers with real-time distance and **Scarcity-based Surge Pricing metadata**. The discovery engine uses a **two-step aggregation pipeline** — first attempting to exclude recently-attempted drivers (cooldown), then falling back to the full pool if no alternatives exist, ensuring the user is never left without options.
-2.  **Privacy-First Handshake**: Before trip acceptance, only the User's **Name** is shared with drivers. Contact details are strictly hidden to ensure safety during the bidding phase.
-3.  **Real-Time Proximity Pulse**: Drivers emit live GPS coordinates every 5s, which are transformed into **`distanceMeters`** and **`estimateArrivalMins`** (ETA) for the User.
-4.  **Proactive OTP Delivery**: The system pushes the secure 4-digit OTP to the User **immediately** when the driver marks their arrival (`driver_arrived` socket event).
-5.  **Admin Bidding Audit**: A dedicated history engine (`GET /negotiations/history/:orderId`) allows administrators to review the full 3-round bidding transcript of any trip.
-6.  **Identity Integrity**: Strict uniqueness enforcement on **National ID (NID)** and **Driver License** numbers at the database level to prevent fraudulent accounts.
-7.  **Atomic Driver Locking**: Drivers are atomically locked during a negotiation (`isNegotiating: true`) to prevent "Phantom Bids" and ensure dedicated attention.
-8.  **Driver Retry Cooldown Strategy**: After a failed or rejected negotiation, the driver's ID and timestamp are recorded in `attemptedDrivers` (capped at last 20 entries). A **2-minute cooldown** prevents spam re-negotiation, while a **fallback mechanism** ensures the driver reappears in discovery if no other drivers are nearby — preventing false "no drivers available" scenarios.
-9.  **Zero-Trust OTP Verification**: Trips cannot begin until the Driver verifies a 4-digit OTP provided by the User, ensuring a secure "Patient-in-Ambulance" confirmation.
+### 🌍 3. Intelligent Geo-Discovery
+*   **Hybrid Heartbeat Discovery**: Beyond simple "Online" status, the engine tracks **`lastAppHeartbeatAt`** to allow a **5-minute Background Grace Period**, ensuring drivers who switch apps (e.g., to Google Maps) remain visible.
+*   **Scarcity-Based Surge Pricing**: Automatically calculates suggested fares based on real-time driver density in the local area.
+*   **Re-discovery Cooldown**: Implements a "Cooldown Strategy" where recently-contacted drivers are hidden from discovery for 2 minutes — unless they are the only drivers nearby, maintaining a balance between user choice and driver variety.
 
 ---
 
-### 🛠 Tech Stack & Security
-#### **High-Performance Core**
-*   **Node.js & Express**: Scalable runtime and minimalist API framework.
-*   **MongoDB (Native Driver)**: High-speed document store utilizing **2dsphere Geospatial Indexes** for proximity search.
-*   **Socket.io**: Persistent bi-directional communication with **Namespace Partitioning**.
-*   **Pino**: Structured, ultra-fast logging with Correlation ID tracking.
+## 🔐 Security & Integrity Standard
 
-#### **Security Hardening**
-*   **Replay Attack Defense**: Nonce-based security guards for all state-changing WebSocket events with **TTL-based automatic cleanup**.
-*   **Military-Grade Headers**: Helmet.js injects 11 security headers; CORS strictly restricts cross-origin resource sharing.
-*   **JWT (Dual-Token Rotation)**: Secure Access and Refresh tokens for long-lived, high-security sessions.
-*   **Identity Guard**: Unique Indexing on sensitive document fields (NID, License, Email, Phone).
+*   **Socket Replay Defense**: All state-changing socket events require a `timestamp` + `nonce` signature, validated against a 30s sliding window.
+*   **Optimistic Concurrency (OCC)**: Every status change relies on a strict `version` field check, preventing race conditions where two updates hit the server simultaneously.
+*   **Identity Guard**: Strict uniqueness enforcement on **National ID (NID)** and **Vehicle Licenses** at the database level.
+*   **Zero-Trust OTP Flow**: Trips are mathematically impossible to start until the Driver verifies a secure 4-digit OTP provided by the User at the point of arrival.
 
 ---
 
-### 📂 Structural Hierarchy
+## 🛠️ Technical Ecosystem
+
+| Category | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Runtime** | **Node.js (LTS)** | High-performance asynchronous execution. |
+| **Framework**| **Express.js** | Minimalist, modular API gateway. |
+| **Persistence**| **MongoDB** | Schema-less flexibility with **2dsphere Geospatial Indexing**. |
+| **Real-time** | **Socket.io** | Bi-directional communication with **Room Partitioning**. |
+| **Logging** | **Pino** | Structured, JSON-based high-speed logging. |
+| **Security** | **Helmet / CORS / JWT** | Deep-defense profiling for modern web threats. |
+| **Dev Tools** | **OpenAPI (Swagger)** | Definitive REST documentation and schema validation. |
+
+---
+
+## 📂 Project Hierarchy
 ```text
 src/
-├── config/           # DB Connection, Geospatial Indexing, TTL Cleanup
-├── core/             # Global Error Handlers, Socket Hub, Pulse Worker
-├── middlewares/      # JWT, RBAC, Rate Limiting, Replay Protection
-├── modules/          # Bounded Contexts (Vertical Slices)
-├── routes/           # Unified API Gateway (Versioned Index)
-└── utils/            # Common Helpers (Email, JWT, Security Nonces)
+├── config/           # Database, Geospatial Indexes, TTL Strategies
+├── core/             # Global Error Handlers, Socket Services, Background Pulse Workers
+├── middlewares/      # JWT Rotation, RBAC (Role-Based Access), Replay Attack Defense
+├── modules/          # Bounded Contexts (Auth, Partner, Order, Notification, Negotiation)
+├── routes/           # Versioned API Gateway (V1)
+└── utils/            # JWT Generation, Security Nonce Verification, Structured Logging
 ```
 
 ---
 
-### 🚀 Rapid Start & Verification
-1.  **Install Dependencies**: `npm install`
-2.  **Configure `.env`**: (Follow the Blueprint in `.env.example`)
-3.  **Launch Primary Server**: `npm start`
-4.  **Exhaustive E2E Verification**:
-    ```bash
-    node exhaustive_test.js
-    ```
-    *This script verifies 100% of the system paths (Discovery → Negotiation → Bidding → Rejection → Cooldown Tracking → Re-discovery → OTP → Completion).*
+## 🚀 Verification & Testing
+The system includes an **Exhaustive Integration Test Suite** (`test.js`) that simulates the entire lifecycle of a medical emergency:
+```bash
+# Verify 100% Of All API Routes and Socket Logic
+node test.js
+```
+The test covers four distinct scenarios including **Success paths**, **Max Round Blockers**, **User Abandonment**, and **Notification Idempotency**.
 
 ---
 
-### 👨‍💻 Primary Developer & Architect
+## 👨‍💻 Developed By
 **Muhammad Al-Roman Molla**  
-*System Architect | Backend Specialist*  
-**A Project for the People’s Republic of Bangladesh**
+*Full-Stack Engineer | Systems Architect*  
 
-Email: [alromanmolla@gmail.com](mailto:alromanmolla@gmail.com)  
-LinkedIn: [al-roman](https://www.linkedin.com/in/al-roman)  
-Phone: 01319694957
+**"Architecting secure bridges between life-saving data and those who need it most."** — Built for the People's Republic of Bangladesh.
 
----
-*"Architecting secure bridges between life-saving data and those who need it most."* — Made with ❤️ by Muhammad Al-Roman Molla
+📧 [alromanmolla@gmail.com](mailto:alromanmolla@gmail.com)  
+🔗 [LinkedIn Profile](https://www.linkedin.com/in/al-roman)  

@@ -37,7 +37,8 @@ class BackgroundWorker {
         this.clearStaleNegotiationLocks(),
         this.reconcileExpiredSessions(now),
         this.reconcileGhostTrips(),
-        this.reconcileBackgroundGracePeriods()
+        this.reconcileBackgroundGracePeriods(),
+        this.reconcilePendingNotifications()
       ]);
 
     } catch (err) {
@@ -151,6 +152,42 @@ class BackgroundWorker {
         // Step D: Unlock The Driver But With The Penalty Flag
         await PartnerRepository.unlockDriver(order.partnerId.toString());
       }));
+    }
+  }
+
+  // Task: Surface And Retry Missed Critical Notifications (High/Medium Only)
+  async reconcilePendingNotifications() {
+    try {
+      const NotificationRepository = require("../modules/notification/notification.repository");
+      const NotificationService = require("../modules/notification/notification.service");
+
+      const pending = await NotificationRepository.findPendingForRetry(["HIGH", "MEDIUM"]);
+      if (pending.length === 0) return;
+
+      const now = Date.now();
+      for (const n of pending) {
+        // Calculate Age In Seconds
+        const ageSec = (now - new Date(n.createdAt)) / 1000;
+
+        // Exponential Backoff: 5s -> 15s -> 45s (Retry Only If Threshold Met)
+        let shouldRetry = false;
+        if (ageSec > 45 && n.retryCount < 3) shouldRetry = true;
+        else if (ageSec > 15 && n.retryCount < 2) shouldRetry = true;
+        else if (ageSec > 5 && n.retryCount < 1) shouldRetry = true;
+
+        if (shouldRetry) {
+          logger.info({ notificationId: n._id }, "Retrying Critical Notification Delivery Via Background Worker.");
+
+          // Increment Internal Retry Counter Before Delivery Attempt
+          await NotificationRepository.incrementRetry(n._id);
+
+          await NotificationService.deliverRealTime(
+            n._id, n.recipientId.toString(), n.type, n.content, n.sequence
+          );
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "Pending Notification Reconciliation Pulse Failed!");
     }
   }
 

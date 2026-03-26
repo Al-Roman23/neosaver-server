@@ -3,6 +3,7 @@ const NegotiationRepository = require("./negotiation.repository");
 const OrderRepository = require("../order/order.repository");
 const PartnerRepository = require("../partner/partner.repository");
 const AnalyticsService = require("../analytics/analytics.service");
+const NotificationService = require("../notification/notification.service");
 const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { Conflict, NotFound } = require("../../core/errors/errors");
@@ -73,6 +74,21 @@ class NegotiationService {
         throw new Conflict("Unable To Start Negotiation — Order State Has Changed!");
       }
 
+      // 4. Trigger Dispatch Delivery Via New Event Engine (MVP: Replaces Manual Socket Emit)
+      await NotificationService.trigger({
+        orderId,
+        type: "NEGOTIATION_REQ",
+        recipientId: driverId,
+        actorId: userId,
+        priority: "HIGH",
+        channels: ["push", "in_app", "store"],
+        data: {
+          sessionId: negotiationSession._id,
+          userId,
+          orderId
+        }
+      });
+
       return negotiationSession;
     } catch (err) {
       // Safety Net: Ensure Driver Is Never Left Permanently Locked
@@ -111,6 +127,17 @@ class NegotiationService {
     // 4. Close Negotiation Session
     await NegotiationRepository.updateStatus(sessionId, "accepted", { endedReason: "agreement_reached" });
 
+    // 5. Trigger Acceptance Notifications For Both Parties (Sync Handshake)
+    await NotificationService.trigger({
+      orderId, type: "USER_ACCEPTED", recipientId: negotiation.driverId, actorId: negotiation.userId,
+      priority: "HIGH", channels: ["push", "in_app", "store"], data: { orderId, finalPrice }
+    });
+
+    await NotificationService.trigger({
+      orderId, type: "DRIVER_ACCEPTED", recipientId: negotiation.userId, actorId: negotiation.driverId,
+      priority: "HIGH", channels: ["push", "in_app", "store"], data: { orderId, finalPrice }
+    });
+
     // 5. Log Analytics Asynchronously (Non-Critical — Does Not Block Flow)
     const order = await OrderRepository.findById(orderId);
     AnalyticsService.logNegotiationEvent(
@@ -134,6 +161,19 @@ class NegotiationService {
     // 1. Mark Session As Ended
     const outcome = reason === "no_response_timeout" ? "expired_timeout" : "rejected";
     await NegotiationRepository.updateStatus(sessionId, outcome, { endedReason: reason });
+
+    // 2. Trigger Rejection Notifications (Only If Manually Rejected, Not For Worker Timeouts)
+    if (reason !== "no_response_timeout") {
+      await NotificationService.trigger({
+        orderId: negotiation.orderId, type: "USER_REJECTED", recipientId: negotiation.driverId, actorId: negotiation.userId,
+        priority: "MEDIUM", channels: ["in_app", "store"], data: { orderId: negotiation.orderId, reason }
+      });
+
+      await NotificationService.trigger({
+        orderId: negotiation.orderId, type: "DRIVER_REJECT_ORD", recipientId: negotiation.userId, actorId: negotiation.driverId,
+        priority: "MEDIUM", channels: ["push", "in_app", "store"], data: { orderId: negotiation.orderId, reason }
+      });
+    }
 
     // 2. Clear Driver Lock
     await PartnerRepository.unlockFromNegotiation(negotiation.driverId);

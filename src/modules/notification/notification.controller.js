@@ -1,44 +1,54 @@
-// This File Handles The Notification Controller For Testing Api
-const OfflineNotificationRepository = require("./offlineNotification.repository");
-const SocketService = require("../../core/socket");
+// This File Handles The Notification Controller For The Elite Event Engine
+const NotificationService = require("./notification.service");
+const NotificationRepository = require("./notification.repository");
 const { BadRequest } = require("../../core/errors/errors");
 
 class NotificationController {
-  // Send Or Queue A Notification
+  // Trigger A Mission-critical Notification Flow (Service-based)
   async sendNotification(req, res, next) {
     try {
-      const { userId, event, data } = req.body;
+      const { userId, orderId, type, priority, channels, data, version } = req.body;
 
-      if (!userId || !event || !data) {
-        throw new BadRequest("User ID, Event, And Data Are Required!");
+      if (!userId || !type || !orderId) {
+        throw new BadRequest("UserId, Type, And OrderId Are Mandatory For Reliability!");
       }
 
-      // Attempt To Send Instantly (Will Queue If User Offline)
-      SocketService.sendToUser(userId, event, data);
+      // Execute The Phased Trigger Lifecycle (Idempotency + Sequencing + Delivery)
+      const result = await NotificationService.trigger({
+        recipientId: userId,
+        orderId,
+        type,
+        priority: priority || "MEDIUM",
+        channels: channels || ["in_app", "store"],
+        data: data || {},
+        version: version || 0
+      });
 
-      res.json({
+      res.status(201).json({
         success: true,
-        message: "Notification Processed (Sent Or Queued).",
+        notificationId: result.notificationId,
+        message: "Event Formally Dispatched Via Reliability Engine.",
       });
     } catch (error) {
       next(error);
     }
   }
 
-  // Get Pending Notifications For Verification
-  async getPendingNotifications(req, res, next) {
+  // Get Comprehensive Notification History For The User Dashboard
+  async getHistory(req, res, next) {
     try {
       const { userId } = req.params;
 
       if (!userId) {
-        throw new BadRequest("User ID Is Required!");
+        throw new BadRequest("User Id Is Required For History Retrieval!");
       }
 
-      const pending = await OfflineNotificationRepository.getPendingNotifications(userId);
+      // Fetch Verified Persistence Logs From Repository
+      const history = await NotificationRepository.findByRecipientId(userId);
 
       res.json({
         success: true,
-        data: pending,
+        data: history,
       });
     } catch (error) {
       next(error);

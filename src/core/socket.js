@@ -4,7 +4,6 @@
 const { Server } = require("socket.io");
 const { verifyToken } = require("../utils/jwt");
 const logger = require("../utils/logger");
-const OfflineNotificationService = require("../modules/notification/offlineNotification.service");
 const PartnerRepository = require("../modules/partner/partner.repository");
 const OrderRepository = require("../modules/order/order.repository");
 
@@ -64,10 +63,13 @@ class SocketService {
     this.io.on("connection", (socket) => {
       const userId = socket.userId;
 
-      // Map User Id To Socket Id
+      // 1. Map User Id To Socket Id
       this.users.set(userId.toString(), socket.id);
 
-      // Force Drivers To Join A Dedicated Room For Dispatch Targeting
+      // 2. Join A Dedicated User Room For Multi-device Synchronized Delivery
+      socket.join("user_" + userId);
+
+      // 3. Force Drivers To Join A Dedicated Room For Dispatch Targeting
       socket.join("driver_" + userId);
 
       logger.info({ userId, socketId: socket.id }, "User Online — Listening For Core Engine Events.");
@@ -76,9 +78,13 @@ class SocketService {
       PartnerRepository.updateByUserId(userId, { lastSocketConnectedAt: new Date() }).catch(() => { });
 
       // Attempt To Deliver Any Pending Offline Notifications Asynchronously
-      OfflineNotificationService.deliverPendingNotifications(userId, socket);
+      const NotificationService = require("../modules/notification/notification.service");
+      const NotificationRepository = require("../modules/notification/notification.repository");
 
-      // Listener For Driver Location Updates With Rate Limiting
+      // Sync Missed Events On Connection
+      this.deliverPending(userId, socket);
+
+      // 4. Listener For Driver Location Updates With Rate Limiting
       socket.on("driver_location_update", async ({ lat, lng }) => {
         try {
           if (!lat || !lng) return;
@@ -151,14 +157,7 @@ class SocketService {
             if (driverSocket) driverSocket.join("order_" + orderId);
           }
 
-          // Emit Negotiation Request To Driver (Include Combined Payload For Latency Reduction)
-          this.io.to("driver_" + driverId).emit("new_negotiation_request", {
-            orderId,
-            sessionId: session._id,
-            userId,
-            order: combinedOrder
-          });
-
+          // Note: New Negotiation Request Notification Is Now Handled In NegotiationService.initiate()
           ack({ success: true, sessionId: session._id });
           logger.info({ orderId, userId, driverId }, "Negotiation Formally Initiated!");
         } catch (error) {
@@ -181,21 +180,14 @@ class SocketService {
           if (sequence <= (session.lastSequence || 0)) return ack({ success: false, message: "Out-of-Order Packet Trapped!" });
 
           if (action === "accept") {
-            // 1. Service-layer Atomic Completion (Business Rules + Analytics)
+            // 1. Service-layer Atomic Completion (Business Rules + Analytics + Delivery Engine)
             await NegotiationService.completeNegotiation(sessionId, orderId);
-
-            // 2. Synchronize Unified State To Room Participants
-            this.io.to("order_" + orderId).emit("negotiation_finalized", {
-              status: "accepted",
-              orderId
-            });
-
             return ack({ success: true });
           }
 
           if (action === "reject") {
+            // 2. Service-layer Atomic Rejection (Business Rules + Analytics + Delivery Engine)
             await NegotiationService.failNegotiation(sessionId, "rejected_by_party");
-            this.io.to("order_" + orderId).emit("negotiation_finalized", { status: "rejected", orderId });
             return ack({ success: true });
           }
 
@@ -234,6 +226,18 @@ class SocketService {
         }
       });
 
+      // 5. Listener For Client-side Notification Acknowledgments (ACK Master Flow)
+      socket.on("notification_ack", async ({ notificationId }) => {
+        try {
+          if (!notificationId) return;
+          const NotificationRepository = require("../modules/notification/notification.repository");
+          await NotificationRepository.markAsDelivered(notificationId);
+          logger.info({ userId, notificationId }, "Notification Formally Acknowledged By Client.");
+        } catch (err) {
+          logger.warn({ err, userId }, "Failed To Handle Notification ACK!");
+        }
+      });
+
       socket.on("disconnect", async () => {
         this.users.delete(userId.toString());
         locationRateLimits.delete(userId.toString());
@@ -250,26 +254,37 @@ class SocketService {
     // Websocket Service Initialized Successfully!
   }
 
-  // Refactored Reliable Delivery With Triple-retry Ack Logic For Mission-critical Status
-  sendToUser(userId, event, data, retryCount = 0) {
-    const socketId = this.users.get(userId.toString());
-    if (socketId && this.io) {
-      // Use Socket.io Built-in Timeout To Verify Remote Handshake
-      this.io.to(socketId).timeout(5000).emit(event, data, (err, responses) => {
-        if (err) {
-          if (retryCount < 2) {
-            logger.warn({ userId, event, retryCount }, "Real-time ACK Missing — Retrying...");
-            this.sendToUser(userId, event, data, retryCount + 1);
-          } else {
-            logger.error({ userId, event }, "TCP/WS Delivery Exhausted — Queueing Persistence.");
-            OfflineNotificationService.queueNotification(userId, event, data);
-          }
-        }
-      });
+  // Sync Pending Database Notifications For Recipient On Connection
+  async deliverPending(userId, socket) {
+    try {
+      const NotificationRepository = require("../modules/notification/notification.repository");
+      const pendingEv = await NotificationRepository.findByRecipientId(userId);
+
+      const unconfirmed = pendingEv.filter(n => n.deliveryStatus !== "SENT");
+      if (unconfirmed.length === 0) return;
+
+      for (const n of unconfirmed) {
+        const eventName = n.type === "OTP_RECEIVED" ? "otp_received" : "notification_received";
+        socket.emit(eventName, {
+          notificationId: n._id.toString(),
+          type: n.type,
+          data: n.content,
+          sequence: n.sequence,
+          timestamp: n.createdAt
+        });
+      }
+    } catch (err) {
+      logger.error({ err, userId }, "Failed To Sync Pending Notifications!");
+    }
+  }
+
+  // Refactored Reliable Delivery For Generic Events (Legacy Support)
+  sendToUser(userId, event, data) {
+    // Deliver To All Active Devices Joined To The User Room
+    if (this.io) {
+      this.io.to("user_" + userId).emit(event, data);
       return true;
     }
-
-    OfflineNotificationService.queueNotification(userId, event, data);
     return false;
   }
 }
