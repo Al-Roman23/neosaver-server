@@ -145,19 +145,14 @@ class SocketService {
             orderId, driverId, version
           });
 
-          // Fetch Combined Order + Limited User Profile For Driver Ui
-          const OrderService = require("../modules/order/order.service");
-          const combinedOrder = await OrderService.getOrderDetails(orderId, driverId, "driver");
-
-          // Join Both Participant Rooms For Real-time Sync
+          // The driver session joining and notification delivery are now handled 
+          // atomically within the NegotiationService and NotificationService layers.
           socket.join("order_" + orderId);
           const driverSocketId = this.users.get(driverId.toString());
           if (driverSocketId) {
             const driverSocket = this.io.sockets.sockets.get(driverSocketId);
             if (driverSocket) driverSocket.join("order_" + orderId);
           }
-
-          // Note: New Negotiation Request Notification Is Now Handled In NegotiationService.initiate()
           ack({ success: true, sessionId: session._id });
           logger.info({ orderId, userId, driverId }, "Negotiation Formally Initiated!");
         } catch (error) {

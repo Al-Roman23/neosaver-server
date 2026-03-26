@@ -115,7 +115,8 @@ class NotificationService {
     };
 
     if (legacyMap[type]) {
-      socketService.io.to("user_" + userId).emit(legacyMap[type], payload);
+      // [LEGACY SYNC] Emit raw data directly for compatibility with older app versions
+      socketService.io.to("user_" + userId).emit(legacyMap[type], data);
     }
   }
 }
