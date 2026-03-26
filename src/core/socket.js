@@ -254,27 +254,46 @@ class SocketService {
     // Websocket Service Initialized Successfully!
   }
 
-  // Sync Pending Database Notifications For Recipient On Connection
+  // Sync Pending Database Notifications For Recipient On Connection (Reliability Pulse)
   async deliverPending(userId, socket) {
     try {
       const NotificationRepository = require("../modules/notification/notification.repository");
       const pendingEv = await NotificationRepository.findByRecipientId(userId);
 
+      // Extract Untracked Notifications To Flush Buffer
       const unconfirmed = pendingEv.filter(n => n.deliveryStatus !== "SENT");
       if (unconfirmed.length === 0) return;
 
+      // Legacy Mapping For Backward Compatibility With Driver/User Apps
+      const legacyMap = {
+        NEGOTIATION_REQ: "new_negotiation_request",
+        OTP_RECEIVED: "driver_arrived",
+        DRIVER_FINISHED: "ready_for_feedback",
+        USER_CANCELLED: "order_cancelled",
+        DRIVER_REJECT_ORD: "order_cancelled",
+      };
+
       for (const n of unconfirmed) {
+        // 1. Map Core Type To Client-Side Event Signature
         const eventName = n.type === "OTP_RECEIVED" ? "otp_received" : "notification_received";
-        socket.emit(eventName, {
+        const payload = {
           notificationId: n._id.toString(),
           type: n.type,
           data: n.content,
           sequence: n.sequence,
           timestamp: n.createdAt
-        });
+        };
+
+        // 2. Emit Primary Unified Event
+        socket.emit(eventName, payload);
+
+        // 3. Emit Parallel Legacy Event If Mapping Found
+        if (legacyMap[n.type]) {
+          socket.emit(legacyMap[n.type], payload);
+        }
       }
     } catch (err) {
-      logger.error({ err, userId }, "Failed To Sync Pending Notifications!");
+      logger.error({ err, userId }, "Failed To Sync Pending Notifications During Pulse!");
     }
   }
 

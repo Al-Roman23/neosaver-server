@@ -8,8 +8,8 @@ const delay = ms => {
     return new Promise(res => setTimeout(res, ms));
 };
 
-const BASE_URL = "http://localhost:5000/v1/api";
-const SOCKET_URL = "http://localhost:5000";
+const BASE_URL = "https://neosaver-server.onrender.com/v1/api";
+const SOCKET_URL = "https://neosaver-server.onrender.com";
 
 // Replay Attack Helpers
 const generateSecurity = () => ({ timestamp: Date.now(), nonce: Math.random().toString(36).substring(7) });
@@ -288,13 +288,20 @@ async function runTest() {
         await delay(9000);
         const oRes = await axios.post(`${BASE_URL}/orders`, {
             pickupLat: 23.8103, pickupLng: 90.4125,
+            pickupAddress: "Elite Residence, Banani",
             destinationLat: 23.7500, destinationLng: 90.3900,
+            destinationAddress: "United Hospital, Gulshan",
             notes: "URGENT TEST"
         }, { headers: { Authorization: `Bearer ${userToken}` } });
         orderId = oRes.data.data._id;
         otpCode = oRes.data.data.otp.code;
-        const initialVersion = oRes.data.data.version;
-        console.log("✅ POST /orders — Order Created (Status: Pending) OK!");
+        
+        // Verify Smart Distance & Address Persistence
+        const oData = oRes.data.data;
+        const initialVersion = oData.version;
+        if (oData.pickupAddress === "Elite Residence, Banani" && oData.distanceKm > 0) {
+            console.log(`✅ POST /orders — Order Created! (Distance: ${oData.distanceKm} km) OK!`);
+        }
 
         // Guard: Duplicate Active Order
         console.log("⏱️ Waiting 9s Before Duplicate Guard...");

@@ -23,6 +23,7 @@ A sophisticated bidding system that facilitates fair-market discovery:
 *   **Three-Round Protocol**: Enforces a strict 3-round limit on negotiations to ensure decisions are made rapidly during medical emergencies.
 
 ### 🌍 3. Intelligent Geo-Discovery
+*   **Smart-Data Resilience**: The engine automatically calculates **Haversine Trip Distance (km)** and provides **Intelligent Address Fallbacks** (e.g., formatting coordinates into human-readable strings if missing). This ensures the UI never displays "Unknown" values, even for legacy or coordinate-only records.
 *   **Hybrid Heartbeat Discovery**: Beyond simple "Online" status, the engine tracks **`lastAppHeartbeatAt`** to allow a **5-minute Background Grace Period**, ensuring drivers who switch apps (e.g., to Google Maps) remain visible.
 *   **Scarcity-Based Surge Pricing**: Automatically calculates suggested fares based on real-time driver density in the local area.
 *   **Re-discovery Cooldown**: Implements a "Cooldown Strategy" where recently-contacted drivers are hidden from discovery for 2 minutes — unless they are the only drivers nearby, maintaining a balance between user choice and driver variety.

@@ -18,6 +18,18 @@ const expiryTimers = new Map();
 // In-memory Registry: OrderId -> Promise Resolver For WaitForAcceptance()
 const acceptanceResolvers = new Map();
 
+// Calculate Great Circle Distance Between Two Points In Kilometers -> Formula: Haversine
+function getHaversineDistance(lon1, lat1, lon2, lat2) {
+  const R = 6371; // Earth Radius In Km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return parseFloat((R * c).toFixed(2)); // Return 2 Decimal Places For Precision
+}
+
 class OrderService {
   // Manual Discovery Phase: Find Nearby Drivers & Aggregated Surge Data
   async fetchNearbyForDiscovery(pickupLng, pickupLat, userId) {
@@ -103,7 +115,7 @@ class OrderService {
   }
 
   // Create A New Order In Pending State For User Discovery
-  async createOrder(userId, { pickupLng, pickupLat, destinationLng, destinationLat, notes, fareEstimate, partnerId, ambulanceType }) {
+  async createOrder(userId, { pickupLng, pickupLat, destinationLng, destinationLat, pickupAddress, destinationAddress, notes, fareEstimate, partnerId, ambulanceType }) {
     if (!pickupLng || !pickupLat || !destinationLng || !destinationLat) {
       throw new BadRequest("Pickup And Destination Coordinates Are Required!");
     }
@@ -121,6 +133,8 @@ class OrderService {
       status: "pending",
       pickupLocation: { type: "Point", coordinates: [parseFloat(pickupLng), parseFloat(pickupLat)] },
       destinationLocation: { type: "Point", coordinates: [parseFloat(destinationLng), parseFloat(destinationLat)] },
+      pickupAddress: pickupAddress || null,
+      destinationAddress: destinationAddress || null,
       driverLocation: null,
       notes: notes || null,
       fareEstimate: fareEstimate ? parseFloat(fareEstimate) : null,
@@ -228,7 +242,10 @@ class OrderService {
 
     // Join Partner Details If Assigned (Transparency Post-acceptance)
     let partner = null;
-    if (order.partnerId && ["accepted", "arrived", "pickup_started", "to_destination", "completed"].includes(order.status)) {
+    if (
+      order.partnerId &&
+      ["accepted", "arrived", "pickup_started", "to_destination", "completed"].includes(order.status)
+    ) {
       const partnerData = await PartnerRepository.findByUserId(order.partnerId.toString());
       const driverUser = await UserRepository.findById(order.partnerId.toString());
 
@@ -245,9 +262,58 @@ class OrderService {
       }
     }
 
+    // Transform GeoJSON Coordinates Into Lat/Lng Structure With Smart Fallbacks
+    let pickup = null;
+    let destination = null;
+    let distanceKm = order.distanceKm || null;
+
+    if (order.pickupLocation && order.pickupLocation.coordinates) {
+      const [pickupLng, pickupLat] = order.pickupLocation.coordinates;
+      pickup = {
+        lat: pickupLat,
+        lng: pickupLng,
+        address: order.pickupAddress || `Location [${pickupLat.toFixed(4)}, ${pickupLng.toFixed(4)}]`
+      };
+
+      if (order.destinationLocation && order.destinationLocation.coordinates) {
+        const [destLng, destLat] = order.destinationLocation.coordinates;
+        destination = {
+          lat: destLat,
+          lng: destLng,
+          address: order.destinationAddress || `Location [${destLat.toFixed(4)}, ${destLng.toFixed(4)}]`
+        };
+
+        // Smart Calculation: Compute Trip Distance If Missing In Database
+        if (!distanceKm) {
+          distanceKm = getHaversineDistance(pickupLng, pickupLat, destLng, destLat);
+        }
+      }
+    }
+
+    // Smart Calculation: Distance To Pickup (If Requester Is A Driver Or In Negotiation)
+    let distanceToPickupKm = null;
+    if (isDriver || isNegotiator) {
+      const driver = await PartnerRepository.findByUserId(normalizedReqId);
+      if (driver && driver.location && driver.location.coordinates && pickup) {
+        const [dLng, dLat] = driver.location.coordinates;
+        distanceToPickupKm = getHaversineDistance(dLng, dLat, pickup.lng, pickup.lat);
+      }
+    }
+
+    // Construct Final Response Payload
     const result = {
       ...order,
-      user: user ? { name: user.name, firstName: user.firstName, lastName: user.lastName } : null,
+      pickup,
+      destination,
+      distanceKm,
+      distanceToPickupKm,
+      user: user
+        ? {
+          name: user.name,
+          firstName: user.firstName,
+          lastName: user.lastName
+        }
+        : null,
       partner: partner || null
     };
 

@@ -11,6 +11,7 @@ class OrderController {
         pickupLng, pickupLat,
         destinationLng, destinationLat,
         pickupLocation, destinationLocation,
+        pickupAddress, destinationAddress,
         notes, fareEstimate, partnerId, ambulanceType
       } = req.body;
 
@@ -20,6 +21,8 @@ class OrderController {
         pickupLat: pickupLat || (pickupLocation ? pickupLocation.lat : null),
         destinationLng: destinationLng || (destinationLocation ? destinationLocation.lng : null),
         destinationLat: destinationLat || (destinationLocation ? destinationLocation.lat : null),
+        pickupAddress,
+        destinationAddress,
         notes,
         fareEstimate,
         partnerId,
