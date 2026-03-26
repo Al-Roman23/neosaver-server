@@ -150,7 +150,8 @@ class OrderService {
       penaltyFlag: false, // Tracks Business Violations (e.g. Cancel Post-Otp)
     });
 
-    return order;
+    // Return Enriched Details To Ensure Frontend Receives Legacy Fields (pickupLat, etc.)
+    return this.getOrderDetails(order._id.toString(), userId, "user");
   }
 
   // User Or Driver Cancels An Order (Supports Granular Penalty Logic — No Transactions)
@@ -307,6 +308,13 @@ class OrderService {
       destination,
       distanceKm,
       distanceToPickupKm,
+      pickupLat: pickup ? pickup.lat : null,
+      pickupLng: pickup ? pickup.lng : null,
+      destinationLat: destination ? destination.lat : null,
+      destinationLng: destination ? destination.lng : null,
+      pickupAddress: pickup ? pickup.address : null,
+      destinationAddress: destination ? destination.address : null,
+
       user: user
         ? {
           name: user.name,
@@ -420,7 +428,9 @@ class OrderService {
   }
 
   async getActiveOrderByPartner(partnerId) {
-    return OrderRepository.findActiveByPartnerId(partnerId);
+    const activeOrder = await OrderRepository.findActiveByPartnerId(partnerId);
+    if (!activeOrder) return null;
+    return this.getOrderDetails(activeOrder._id, partnerId, "driver");
   }
 
   // Get Past Trip History For Driver (Includes Populated User/Patient Details)
@@ -430,8 +440,17 @@ class OrderService {
     // Map Over Orders To Inject Limited User Profile Data For The History View
     return Promise.all(orders.map(async (order) => {
       const user = await UserRepository.findById(order.userId.toString());
+
+      // Hybrid Sync: Add Legacy Coordinates For History View Consistency
+      const [lng, lat] = order.pickupLocation?.coordinates || [0, 0];
+      const [dLng, dLat] = order.destinationLocation?.coordinates || [0, 0];
+
       return {
         ...order,
+        pickupLat: lat,
+        pickupLng: lng,
+        destinationLat: dLat,
+        destinationLng: dLng,
         user: user ? { name: user.name, firstName: user.firstName, lastName: user.lastName, phone: user.phone } : null
       };
     }));

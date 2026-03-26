@@ -83,4 +83,3 @@ The test covers four distinct scenarios including **Success paths**, **Max Round
 **"Architecting secure bridges between life-saving data and those who need it most."** — Built for the People's Republic of Bangladesh.
 
 📧 [alromanmolla@gmail.com](mailto:alromanmolla@gmail.com)  
-🔗 [LinkedIn Profile](https://www.linkedin.com/in/al-roman)  

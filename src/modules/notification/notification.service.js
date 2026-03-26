@@ -34,7 +34,16 @@ class NotificationService {
       // 4. Atomic Sequence Allocation
       const sequence = await SequenceCounterRepository.getNextSequence(orderId, recipientId);
 
-      // 5. Permanent Persistence (SSOT For Audit)
+      // 5. Hybrid Sync: Enrich Data With Full Order Details For Dynamic Ui Support
+      if (orderId && !data.order) {
+        const OrderService = require("../order/order.service");
+        const fullOrder = await OrderService.getOrderDetails(orderId, recipientId, "driver").catch(() => null);
+        if (fullOrder) {
+          data.order = fullOrder;
+        }
+      }
+
+      // 6. Permanent Persistence (SSOT For Audit)
       const notificationRecord = {
         recipientId,
         actorId,
@@ -50,7 +59,7 @@ class NotificationService {
       const result = await NotificationRepository.createNotification(notificationRecord);
       const notificationId = result.insertedId;
 
-      // 6. Multi-Channel Routing (MVP Socket Delivery)
+      // 7. Multi-Channel Routing (MVP Socket Delivery)
       if (channels.includes("in_app")) {
         await this.deliverRealTime(notificationId, recipientId, type, data, sequence);
       }
@@ -80,7 +89,7 @@ class NotificationService {
 
     socketService.io.to("user_" + userId).emit(eventName, payload);
 
-    // 7. Backward Compatibility: Emit Original Legacy Event Names To Room
+    // Backward Compatibility: Emit Original Legacy Event Names To Room
     const legacyMap = {
       NEGOTIATION_REQ: "new_negotiation_request",
       OTP_RECEIVED: "driver_arrived", // Mapping To Existing Test Listener
