@@ -15,7 +15,7 @@ class NegotiationService {
     const baseRate = 120; // Example Base Fare In BDT
     const perKmRate = 45;
 
-    // Find Drivers In 25km Radius To Determine Surge
+    // Find Drivers In 25 Kilometers Radius To Determine Surge
     const collection = await getCollection("partners");
     const driverCount = await collection.countDocuments({
       location: {
@@ -153,7 +153,7 @@ class NegotiationService {
     return { orderId, finalPrice };
   }
 
-  // Handle Negotiation Termination (failure/reject/expire) With Analytics (No Transactions)
+  // Handle Negotiation Termination (Failure / Reject / Expire) With Analytics (No Transactions)
   async failNegotiation(sessionId, reason) {
     const negotiation = await NegotiationRepository.findById(sessionId);
     if (!negotiation || negotiation.status !== "active") return;

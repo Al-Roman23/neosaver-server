@@ -9,15 +9,6 @@ const NotificationService = require("../notification/notification.service");
 const { getCollection } = require("../../config/db");
 const { ObjectId } = require("mongodb");
 const { BadRequest, Conflict, NotFound } = require("../../core/errors/errors");
-const logger = require("../../utils/logger");
-
-// In-Memory Registry: OrderId -> Set Of Dispatched Driver Ids In Current Batch
-const dispatchRegistry = new Map();
-// In-memory Registry: OrderId -> Global Expiry SetTimeout Handle
-const expiryTimers = new Map();
-// In-Memory Registry: OrderId -> Promise Resolver For Wait For Acceptance Promise
-const acceptanceResolvers = new Map();
-
 // Calculate Great Circle Distance Between Two Points In Kilometers -> Formula: Haversine
 function getHaversineDistance(lon1, lat1, lon2, lat2) {
   const R = 6371; // Earth Radius In Km
@@ -371,7 +362,7 @@ class OrderService {
       throw new BadRequest("Invalid Verification Code! Trip Cannot Start.");
     }
 
-    const updated = await OrderRepository.updateStatusWithGuard(orderId, partnerId, "arrived", "pickup_started", {
+    await OrderRepository.updateStatusWithGuard(orderId, partnerId, "arrived", "pickup_started", {
       "otp.verified": true,
       pickupStartedAt: new Date(),
     });

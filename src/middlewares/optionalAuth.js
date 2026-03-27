@@ -21,7 +21,7 @@ async function optionalAuth(req, res, next) {
     let decoded;
     try {
       decoded = verifyToken(token);
-    } catch (err) {
+    } catch {
       // If Token Is Invalid, We Don't Throw Error — Just Continue Without User
       // Note: This Might Be Changeable Based On Security Requirements
       // For Optional Auth We Usually Just Ignore Invalid Tokens

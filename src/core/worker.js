@@ -94,7 +94,7 @@ class BackgroundWorker {
   async reconcileExpiredSessions(now) {
     const negotiationCollection = await getCollection("negotiation_sessions");
 
-    // Find Sessions That Are Stuck On "active" But Their Timer Ran Out
+    // Find Sessions That Are Stuck On "Active" But Their Timer Ran Out
     const expiredSessions = await negotiationCollection
       .find({ status: "active", expiresAt: { $lt: now } })
       .toArray();
@@ -128,7 +128,7 @@ class BackgroundWorker {
     }
   }
 
-  // Task: Auto-cancel "ghost" Trips (arrived But No Movement For 15m)
+  // Task: Auto-Cancel "Ghost" Trips (Arrived But No Movement For 15 Minutes)
   async reconcileGhostTrips() {
     // Calculate The Time Limit (15 Minutes Ago)
     const ghostTimeLimit = new Date(Date.now() - 15 * 60 * 1000);
@@ -169,7 +169,7 @@ class BackgroundWorker {
         // Calculate Age In Seconds
         const ageSec = (now - new Date(n.createdAt)) / 1000;
 
-        // Exponential Backoff: 5s -> 15s -> 45s (Retry Only If Threshold Met)
+        // Exponential Backoff: 5 Seconds -> 15 Seconds -> 45 Seconds (Retry Only If Threshold Met)
         let shouldRetry = false;
         if (ageSec > 45 && n.retryCount < 3) shouldRetry = true;
         else if (ageSec > 15 && n.retryCount < 2) shouldRetry = true;

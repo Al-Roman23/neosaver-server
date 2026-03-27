@@ -54,7 +54,7 @@ class SocketService {
         // Atomic Insert-If-Not-Exists (Unique Constraint Handle)
         await collection.insertOne({ nonce, createdAt: new Date() });
         return true;
-      } catch (err) {
+      } catch {
         // Duplicate Nonce Error (Code 11000) Means Replay Detected
         return false;
       }

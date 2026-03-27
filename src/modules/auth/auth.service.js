@@ -23,8 +23,7 @@ class AuthService {
       password,
       address,
       postCode,
-      role,
-      acceptedTerms
+      role
     } = data;
 
     // Check Email Uniqueness
